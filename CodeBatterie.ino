@@ -17,11 +17,11 @@ float Distance1 (0.0)         ;                                        // Variab
 float Temps  (0.0)            ;                                        // Variable de Temps
 float Perimetre (0.0)         ;                                        // Périmètre de la roue du vélo
 float RayonRoue (0.254)       ;                                        // Rayon de la roue du vélo 
-int Tac (0)                   ;                                        // Passage de l'aimant du compteur de vitesse
+char Tac (0)                  ;                                        // Passage de l'aimant du compteur de vitesse
 const byte ValeurCapteur = 2  ;                                        // Le capteur du compteur de vitesse est câblé à la broche numéro 2
 const byte numInterrupt = 0   ;                                        // Numéro de la broche d'interruption
 const int periode = 1000      ;                                        // Période en milliseconde, permet d'avoir la fréquence instantanée du passage de l'aimant
-int ChoixEcran = 4            ;                                        // Bouton permettant d'afficher sur l'écran LCD les tensions, l'intensité, la puissance et la distance parcourue
+char ChoixEcran = 4           ;                                        // Bouton permettant d'afficher sur l'écran LCD les tensions, l'intensité, la puissance et la distance parcourue
 float Courant = 4             ;                                        // potentiometre simulant l'intensité délivrée par la batterie principale
 float Puissance (0.0)         ;                                        // Puissance délivrée par la batterie principale
 
@@ -146,18 +146,18 @@ void loop()
   Intensite = analogRead (Courant)  ;                                     // Lire l'intensité délivré par la batterie principal
   Intensite = (Intensite * 25)/1023 ;                                     // Calcul permettant d'afficher l'intensité en ampère
 
-  Puissance = Tension * Intensite ;                                       // Calcul de la puissance délivrée par la batterie principale
-
-  Temps = Temps / 1000 / 3600          ;
-
-  Distance = Vitesse * Temps           ;                                  // Calcul de la distance parcourue
-  Distance1 = Distance1 + Distance     ;                                  // Enregistrement de la distance actuelle sur une variable Tampon car Distance retourne à 0 si la vitesse est nul
-  
+  Puissance = Tension * Intensite ;                                       // Calcul de la puissance délivrée par la batterie principale  
 
   Capteur.operate()                     ;                                 // Fonction qui met à jour la fréquence instantanée
   Tac = Capteur.TickRate1Period()       ;                                 // Nombre de passage de l'aimant par seconde
   Perimetre = 2 * 3.14 * RayonRoue      ;                                 // Périmètre de la roue
   Vitesse = Tac*Perimetre*3.6           ;                                 // Calcul de la vitesse du vélo
+
+  if (digitalRead(2) == 1)
+  {
+    Distance = Perimetre + Distance ;
+  }
+  Serial.println(Distance/1000) ;
   
   MonEcran.print("   Vitesse : ") ;                                       /////////////////////////////////////////////////
   MonEcran.setCursor(2,16)        ;                                       /////////////////////////////////////////////////
@@ -165,7 +165,7 @@ void loop()
   MonEcran.print(Vitesse)         ;                                       //////////sur l'ecran LCD en temps réel//////////
   MonEcran.print(" km/h")         ;                                       /////////////////////////////////////////////////
 
-  EnvoyerBluetooth (Tension, Tension2, Intensite, Puissance, Vitesse, Distance1) ;     // Appel de la fonction permettant d'envoyer les données via bluetooth
+  EnvoyerBluetooth (Tension, Tension2, Intensite, Puissance, Vitesse, Distance) ;      // Appel de la fonction permettant d'envoyer les données via bluetooth
 
   ChoixEcran = digitalRead(4)     ;                                                    // Lecture de l'état du bouton de changement d'affichage
 
@@ -175,7 +175,7 @@ void loop()
     AfficherEcranIntensite(Intensite)           ;                                     ///////////////////////////////////////////
     AfficherEcranPuissance(Puissance)           ;                                     //////Appel des fonctions d'affichage////// 
     AfficherEcranTensionAuxiliaire(Tension2)    ;                                     /////////////sur l'écran LCD///////////////
-    AfficherEcranDistance(Distance1)            ;                                     // ////////////////////////////////////////
+    AfficherEcranDistance(Distance/1000)        ;                                     ///////////////////////////////////////////
   }
   
   Temps = 0.0 ;
