@@ -116,7 +116,7 @@ void EnvoyerBluetooth(float Tension, float Tension2, float Intensite, float Puis
   Bluetooth.println(" km/h")            ;
 
   Bluetooth.print("Distance parcourue : ") ;                                                                    // Affichage de la distance parcourue sur le téléphone portable                              
-  Bluetooth.print(Distance)                ;
+  Bluetooth.print(Distance/1000)           ;
   Bluetooth.println(" km")                 ;
 }
 
@@ -175,4 +175,3 @@ void loop()
     AfficherEcranDistance(Distance/1000)        ;                                     ///////////////////////////////////////////
   }
 }
-
