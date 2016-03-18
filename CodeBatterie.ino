@@ -33,7 +33,7 @@ const int colorB = 255 ;                                               // Intens
 
 void AfficherEcranTension(float Tension)                               // Fonction d'affichage de la tension sur l'écran LCD
 {
-  MonEcran.clear() ;
+  MonEcran.clear()                   ;
   MonEcran.print("    Tension : ")   ;
   MonEcran.setCursor(2,16)           ;
   MonEcran.print("   ")              ;
@@ -134,30 +134,27 @@ void setup()
 }
 
 void loop() 
-{
-  Temps = millis() ;                                                      // Variable qui utilise la fonction millis()                                                     
-  
-  Tension = analogRead (Batterie) ;                                       // Lire la Tension délivré par la batterie
-  Tension = (Tension * 40)/1023   ;                                       // Calcul permettant d'afficher la tension en volt
+{  
+  Tension = analogRead (Batterie) ;                                        // Lire la Tension délivré par la batterie
+  Tension = (Tension * 40)/1023   ;                                        // Calcul permettant d'afficher la tension en volt
 
-  Tension2 = analogRead (BatterieAux) ;                                   // Lire la Tension délivré par la batterie auxiliaire
-  Tension2 = (Tension2 * 12)/1023     ;                                   // Calcul permettant d'afficher la tension en volt
+  Tension2 = analogRead (BatterieAux) ;                                    // Lire la Tension délivré par la batterie auxiliaire
+  Tension2 = (Tension2 * 12)/1023     ;                                    // Calcul permettant d'afficher la tension en volt
 
-  Intensite = analogRead (Courant)  ;                                     // Lire l'intensité délivré par la batterie principal
-  Intensite = (Intensite * 25)/1023 ;                                     // Calcul permettant d'afficher l'intensité en ampère
+  Intensite = analogRead (Courant)  ;                                      // Lire l'intensité délivré par la batterie principal
+  Intensite = (Intensite * 25)/1023 ;                                      // Calcul permettant d'afficher l'intensité en ampère
 
-  Puissance = Tension * Intensite ;                                       // Calcul de la puissance délivrée par la batterie principale  
+  Puissance = Tension * Intensite ;                                        // Calcul de la puissance délivrée par la batterie principale  
 
-  Capteur.operate()                     ;                                 // Fonction qui met à jour la fréquence instantanée
-  Tac = Capteur.TickRate1Period()       ;                                 // Nombre de passage de l'aimant par seconde
-  Perimetre = 2 * 3.14 * RayonRoue      ;                                 // Périmètre de la roue
-  Vitesse = Tac*Perimetre*3.6           ;                                 // Calcul de la vitesse du vélo
+  Capteur.operate()                     ;                                  // Fonction qui met à jour la fréquence instantanée
+  Tac = Capteur.TickRate1Period()       ;                                  // Nombre de passage de l'aimant par seconde
+  Perimetre = 2 * 3.14 * RayonRoue      ;                                  // Périmètre de la roue
+  Vitesse = Tac*Perimetre*3.6           ;                                  // Calcul de la vitesse du vélo
 
   if (digitalRead(2) == 1)
   {
     Distance = Perimetre + Distance ;
   }
-  Serial.println(Distance/1000) ;
   
   MonEcran.print("   Vitesse : ") ;                                       /////////////////////////////////////////////////
   MonEcran.setCursor(2,16)        ;                                       /////////////////////////////////////////////////
@@ -177,7 +174,5 @@ void loop()
     AfficherEcranTensionAuxiliaire(Tension2)    ;                                     /////////////sur l'écran LCD///////////////
     AfficherEcranDistance(Distance/1000)        ;                                     ///////////////////////////////////////////
   }
-  
-  Temps = 0.0 ;
 }
 
