@@ -126,26 +126,16 @@ float Capteur::Get_Temperature()
 
 void EnvoyerBluetooth(float Tension, float Intensite,
                       float Puissance, float Vitesse, float Distance)            // Fonction d'affichage de la tension, de l'intensité, de la vitesse, de la distance sur smartphone
-{
-  Bluetooth.print("La tension de la batterie est de " ) ;                        // Affichage de la tension sur le téléphone portable
-  Bluetooth.print(Tension)                              ;
-  Bluetooth.println(" V")                               ;
-
-  Bluetooth.print("L'intensite de la batterie est de ") ;                        // Affichage de l'intensité sur le téléphone portable
-  Bluetooth.print(Intensite)                            ;
-  Bluetooth.println(" A")                               ;
-
-  Bluetooth.print("La puissance délivrée est de ")      ;                        // Affichage de la puissance délivrée sur le téléphone portable
-  Bluetooth.print(Puissance)                            ;
-  Bluetooth.println(" W")                               ;
-
-  Bluetooth.print("La vitesse est de ") ;                                        // Affichage de la vitesse sur le téléphone portable
-  Bluetooth.print(Vitesse)              ;
-  Bluetooth.println(" km/h")            ;
-
-  Bluetooth.print("Distance parcourue : ") ;                                     // Affichage de la distance parcourue sur le téléphone portable
-  Bluetooth.print(Distance / 1000)         ;
-  Bluetooth.println(" km")                 ;
+{                       
+  Bluetooth.println(Tension)         ;                                           // Affichage de la tension sur le téléphone portable
+                        
+  Bluetooth.println(Intensite)       ;                                           // Affichage de l'intensité sur le téléphone portable
+                        
+  Bluetooth.println(Puissance)       ;                                           // Affichage de la puissance délivrée sur le téléphone portable
+                                       
+  Bluetooth.println(Vitesse)         ;                                           // Affichage de la vitesse sur le téléphone portable
+                                    
+  Bluetooth.println(Distance / 1000) ;                                           // Affichage de la distance parcourue sur le téléphone portable
 }
 
 void AfficherVitesse(float Vitesse)                               // Fonction d'affichage de la vitesse sur l'écran LCD
@@ -242,17 +232,22 @@ void loop()
 
   EnvoyerBluetooth (Tension, Intensite, Puissance, Vitesse, Distance) ;   // Appel de la fonction permettant d'envoyer les données via bluetooth
 
-  if (CompteurBoucle < 15)
+  if (CompteurBoucle < 40)
   {
     AfficherVitesse(Vitesse) ;                                            // Appel de la méthode d'affichage de la vitesse
 
     while (BoutonChoixEcran == 1)                                         // Si le bouton de blocage à été appuyer alors l'affichage reste sur la vitesse
     {
-      if (digitalRead(4) == 1 && ValeurPrecedente == 1)                   // Si le bouton est de nouveau appuyé, on sort de la boucle pour afficher les autres données
+      Bouton = digitalRead(4) ;                                           // Lecture de l'état du bouton de blocage de l'écran
+  
+      if (Bouton == 1 && Bouton != ValeurPrecedente)                      // Condition de changement d'état
       {
         BoutonChoixEcran = 0 ;
-        CompteurBoucle = 15  ;
+        CompteurBoucle = 40  ;
       }
+  
+      ValeurPrecedente = Bouton ;  
+  
       Tension = BatterieVelo.Get_Tension()                           ;
       Intensite = BatterieVelo.Get_Intensite()                       ;
       Puissance = BatterieVelo.CalculerPuissance(Tension, Intensite) ;
@@ -272,23 +267,28 @@ void loop()
     }
   }
 
-  if (CompteurBoucle == 15)
+  if (CompteurBoucle == 40)
   {
     MonEcran.clear() ;
   }
 
 
-  if (CompteurBoucle > 15 && CompteurBoucle < 30)
+  if (CompteurBoucle > 40 && CompteurBoucle < 80)
   {
     AfficherTension(Tension) ;                                               // Appel de la méthode d'affichage de la tension
 
     while (BoutonChoixEcran == 1)                                            // Si le bouton de blocage à été appuyer alors l'affichage reste sur la tension
     {
-      if (digitalRead(4) == 1 && ValeurPrecedente == 1)                      // Si le bouton est de nouveau appuyé, on sort de la boucle pour afficher les autres données
+      Bouton = digitalRead(4) ;                                           // Lecture de l'état du bouton de blocage de l'écran
+  
+      if (Bouton == 1 && Bouton != ValeurPrecedente)                      // Condition de changement d'état
       {
         BoutonChoixEcran = 0 ;
-        CompteurBoucle = 30  ;
+        CompteurBoucle = 80  ;
       }
+  
+      ValeurPrecedente = Bouton ; 
+      
       Tension = BatterieVelo.Get_Tension()                           ;
       Intensite = BatterieVelo.Get_Intensite()                       ;
       Puissance = BatterieVelo.CalculerPuissance(Tension, Intensite) ;
@@ -308,23 +308,28 @@ void loop()
     }
   }
 
-  if (CompteurBoucle == 30)
+  if (CompteurBoucle == 80)
   {
     MonEcran.clear() ;
   }
 
 
-  if (CompteurBoucle > 30 && CompteurBoucle < 45)
+  if (CompteurBoucle > 80 && CompteurBoucle < 120)
   {
     AfficherIntensite(Intensite) ;                                          // Appel de la méthode d'affichage de l'intensité
 
     while (BoutonChoixEcran == 1)                                           // Si le bouton de blocage à été appuyer alors l'affichage reste sur l'intensité
     {
-      if (digitalRead(4) == 1 && ValeurPrecedente == 1)                     // Si le bouton est de nouveau appuyé, on sort de la boucle pour afficher les autres données
+      Bouton = digitalRead(4) ;                                           // Lecture de l'état du bouton de blocage de l'écran
+  
+      if (Bouton == 1 && Bouton != ValeurPrecedente)                      // Condition de changement d'état
       {
         BoutonChoixEcran = 0 ;
-        CompteurBoucle = 45  ;
+        CompteurBoucle = 120  ;
       }
+  
+      ValeurPrecedente = Bouton ; 
+      
       Tension = BatterieVelo.Get_Tension()                           ;
       Intensite = BatterieVelo.Get_Intensite()                       ;
       Puissance = BatterieVelo.CalculerPuissance(Tension, Intensite) ;
@@ -345,23 +350,28 @@ void loop()
   }
 
 
-  if (CompteurBoucle == 45)
+  if (CompteurBoucle == 120)
   {
     MonEcran.clear() ;
   }
 
 
-  if (CompteurBoucle > 45 && CompteurBoucle < 60)
+  if (CompteurBoucle > 120 && CompteurBoucle < 160)
   {
     AfficherPuissance(Puissance) ;                                        // Appel de la méthode d'affichage de la puissance
 
     while (BoutonChoixEcran == 1)                                         // Si le bouton de blocage à été appuyer alors l'affichage reste sur la puissance
     {
-      if (digitalRead(4) == 1 && ValeurPrecedente == 1)                   // Si le bouton est de nouveau appuyé, on sort de la boucle pour afficher les autres données
+      Bouton = digitalRead(4) ;                                           // Lecture de l'état du bouton de blocage de l'écran
+  
+      if (Bouton == 1 && Bouton != ValeurPrecedente)                      // Condition de changement d'état
       {
         BoutonChoixEcran = 0 ;
-        CompteurBoucle = 60  ;
+        CompteurBoucle = 160  ;
       }
+  
+      ValeurPrecedente = Bouton ; 
+      
       Tension = BatterieVelo.Get_Tension()                           ;
       Intensite = BatterieVelo.Get_Intensite()                       ;
       Puissance = BatterieVelo.CalculerPuissance(Tension, Intensite) ;
@@ -382,22 +392,27 @@ void loop()
   }
 
 
-  if (CompteurBoucle == 60)
+  if (CompteurBoucle == 160)
   {
     MonEcran.clear() ;
   }
 
-  if (CompteurBoucle > 60 && CompteurBoucle < 75)
+  if (CompteurBoucle > 160 && CompteurBoucle < 200)
   {
     AfficherDistance(Distance / 1000) ;                                  // Appel de la méthode d'affichage de la distance
 
     while (BoutonChoixEcran == 1)                                        // Si le bouton de blocage à été appuyer alors l'affichage reste sur la distance
     {
-      if (digitalRead(4) == 1 && ValeurPrecedente == 1)                  // Si le bouton est de nouveau appuyé, on sort de la boucle pour afficher les autres données
+      Bouton = digitalRead(4) ;                                           // Lecture de l'état du bouton de blocage de l'écran
+  
+      if (Bouton == 1 && Bouton != ValeurPrecedente)                      // Condition de changement d'état
       {
         BoutonChoixEcran = 0 ;
-        CompteurBoucle = 75  ;
+        CompteurBoucle = 200  ;
       }
+  
+      ValeurPrecedente = Bouton ; 
+      
       Tension = BatterieVelo.Get_Tension()                           ;
       Intensite = BatterieVelo.Get_Intensite()                       ;
       Puissance = BatterieVelo.CalculerPuissance(Tension, Intensite) ;
@@ -417,7 +432,7 @@ void loop()
     }
   }
 
-  if (CompteurBoucle > 75)
+  if (CompteurBoucle > 200)
   {
     CompteurBoucle = 0 ;                                                  // Le CompteurBoucle est remis à zéro une fois que toutes les données ont été affichées
     MonEcran.clear()   ;
