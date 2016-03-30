@@ -24,7 +24,7 @@ int iBoutonClignotants = 0 ;                                         // Déclara
 int iClignotantGauche = 6  ;                                         // Déclaration du clignotant gauche sur la broche 5
 int iClignotantDroit = 7   ;                                         // Déclaration du clignotant droit sur la broche 6
 int iBoutonWarnings = 2    ;                                         // Déclaration du bouton des warnings sur la broche 2
-bool bEtatDel = HIGH       ;                                         // Définition de l'état de la DEL à l'état haut
+bool bEtatDel = true       ;                                         // Définition de l'état de la DEL à l'état haut
 unsigned long lTimer = 0   ;                                         // Initialisation d'un timer 1 pour le calcul du temps
 int iIntensitePhares = 1   ;
 
@@ -51,21 +51,21 @@ bool allumerClignotantGauche()                                            // Fon
 {
   unsigned long lTimerCourant = millis()                ;                 // Initialisation d'un timer 2
   unsigned long lIntervalle = lTimerCourant - lTimer    ;                 // Temps écoulé entre les deux timers
-  digitalWrite(iClignotantDroit, LOW)                   ;                 // On éteint le clignotant droit
+  digitalWrite(iClignotantDroit, false)                 ;                 // On éteint le clignotant droit
  
-  if (bEtatDel == HIGH && lIntervalle > 500)                              // Si la variable etatDEL est à l'état haut et que le temps écoulé est supérieur à 500 ms
+  if (bEtatDel == true && lIntervalle > 500)                              // Si la variable bEtatDel est à l'état haut et que le temps écoulé est supérieur à 500 ms
   {                                                              
-    bEtatDel = LOW                                      ;                 // La variable etatDEL passe à l'état bas
+    bEtatDel = false                                    ;                 // La variable bEtatDel passe à l'état bas
     digitalWrite(iClignotantGauche, bEtatDel)           ;                 // On éteint le clignotant gauche
     lTimer = lTimerCourant                              ;                 // Le timer 1 prend la valeur du timer 2
   }
-  else if (bEtatDel == LOW && lIntervalle > 500)                          // Sinon si la variable etatDEL est à l'état bas et que le temps écoulé est supérieur à 500 ms
+  else if (bEtatDel == false && lIntervalle > 500)                          // Sinon si la variable bEtatDel est à l'état bas et que le temps écoulé est supérieur à 500 ms
   {
-    bEtatDel = HIGH                                     ;                 // La variable etatDEL passe à l'état haut
+    bEtatDel = true                                     ;                 // La variable bEtatDel passe à l'état haut
     digitalWrite(iClignotantGauche, bEtatDel)           ;                 // On allume le clignotant gauche
     lTimer = lTimerCourant                              ;                 // Le timer 1 prend la valeur du timer 2
   }
-  return bEtatDel                                       ;                 // On retourne l'état de la DEL (variable etatDEL)
+  return bEtatDel                                       ;                 // On retourne l'état de la DEL (variable bEtatDel)
 }
 
 
@@ -75,21 +75,21 @@ bool allumerClignotantDroit()                                             // Fon
 {
   unsigned long lTimerCourant = millis()                ;                 // Initialisation d'un timer 2
   unsigned long lIntervalle = lTimerCourant - lTimer    ;                 // Temps écoulé entre les deux timers
-  digitalWrite(iClignotantGauche, LOW)                  ;                 // On éteint le clignotant gauche
+  digitalWrite(iClignotantGauche, false)                ;                 // On éteint le clignotant gauche
  
-  if (bEtatDel == HIGH && lIntervalle > 500)                              // Si la variable etatDEL est à l'état haut et que le temps écoulé est supérieur à 500 ms
+  if (bEtatDel == true && lIntervalle > 500)                              // Si la variable bEtatDel est à l'état haut et que le temps écoulé est supérieur à 500 ms
   {
-    bEtatDel = LOW                                      ;                 // La variable etatDEL passe à l'état bas
+    bEtatDel = false                                    ;                 // La variable bEtatDel passe à l'état bas
     digitalWrite(iClignotantDroit, bEtatDel)            ;                 // On éteint le clignotant droit
     lTimer = lTimerCourant                              ;                 // Le timer 1 prend la valeur du timer 2
   }
-  else if (bEtatDel == LOW && lIntervalle > 500)                          // Sinon si la variable etatDEL est à l'état bas et que le temps écoulé est supérieur à 500 ms
+  else if (bEtatDel == false && lIntervalle > 500)                        // Sinon si la variable etatDEL est à l'état bas et que le temps écoulé est supérieur à 500 ms
   {
-    bEtatDel = HIGH                                     ;                 // La variable etatDEL passe à l'état haut
+    bEtatDel = true                                     ;                 // La variable bEtatDel passe à l'état haut
     digitalWrite(iClignotantDroit, bEtatDel)            ;                 // On allume le clignotant droit
     lTimer = lTimerCourant                              ;                 // Le timer 1 prend la valeur du timer 2
   }
-  return bEtatDel                                       ;                 // On retourne l'état de la DEL (variable etatDEL)
+  return bEtatDel                                       ;                 // On retourne l'état de la DEL (variable bEtatDel)
 }
 
 
@@ -101,22 +101,22 @@ bool allumerWarnings()                                                    // Fon
   unsigned long lTimerCourant = millis()                ;                 // Initialisation d'un timer 2
   unsigned long lIntervalle = lTimerCourant - lTimer    ;                 // Temps écoulé entre les deux timers
 
-  if (bEtatDel == HIGH && lIntervalle > 500)                              // Si la variable etatDEL est à l'état haut et que le temps écoulé est supérieur à 500 ms
+  if (bEtatDel == true && lIntervalle > 500)                              // Si la variable bEtatDel est à l'état haut et que le temps écoulé est supérieur à 500 ms
   {
-    bEtatDel = LOW                                      ;                 // La variable etatDEL passe à l'état bas
+    bEtatDel = false                                    ;                 // La variable bEtatDel passe à l'état bas
     digitalWrite(iClignotantGauche, bEtatDel)           ;                 // On éteint le clignotant gauche
     digitalWrite(iClignotantDroit, bEtatDel)            ;                 // On éteint le clignotant droit
     lTimer = lTimerCourant                              ;                 // Le timer 1 prend la valeur du timer 2
   }
-  else if (bEtatDel == LOW && lIntervalle > 500)                          // Sinon si la variable etatDEL est à l'état bas et que le temps écoulé est supérieur à 500 ms
+  else if (bEtatDel == false && lIntervalle > 500)                        // Sinon si la variable bEtatDel est à l'état bas et que le temps écoulé est supérieur à 500 ms
   {
-    bEtatDel = HIGH                                     ;                 // La variable etatDEL passe à l'état haut
+    bEtatDel = true                                     ;                 // La variable bEtatDel passe à l'état haut
     digitalWrite(iClignotantGauche, bEtatDel)           ;                 // On allume le clignotant gauche
     digitalWrite(iClignotantDroit, bEtatDel)            ;                 // On allume le clignotant droit
     lTimer = lTimerCourant                              ;                 // Le timer 1 prend la valeur du timer 2
   }
   Serial.println(lTimerCourant) ;
-  return bEtatDel                                       ;                 // On retourne l'état de la DEL (variable etatDEL)
+  return bEtatDel                                       ;                 // On retourne l'état de la DEL (variable bEtatDel)
 }
 
 // --------------------------------------------------------------------------------------------------------------- \\
@@ -125,9 +125,9 @@ bool allumerWarnings()                                                    // Fon
 
 void loop()
 {
-  int iEtatBoutonPhares = digitalRead(iBoutonPhares)          ;         // Lire l'état du bouton des phares et le stocker dans "etatBoutonPhares"
-  int iEtatBoutonClignotants = analogRead(iBoutonClignotants) ;         // Lire l'état du bouton des clignotants et le stocker dans "etatBoutonClignotants"
-  int iEtatBoutonWarnings = digitalRead(iBoutonWarnings)      ;         // Lire l'état du bouton des warnings et le stocker dans "etatBoutonWarnings"
+  int iEtatBoutonPhares = digitalRead(iBoutonPhares)          ;         // Lire l'état du bouton des phares et le stocker dans "iEtatBoutonPhares"
+  int iEtatBoutonClignotants = analogRead(iBoutonClignotants) ;         // Lire l'état du bouton des clignotants et le stocker dans "iEtatBoutonClignotants"
+  int iEtatBoutonWarnings = digitalRead(iBoutonWarnings)      ;         // Lire l'état du bouton des warnings et le stocker dans "iEtatBoutonWarnings"
   int iEtatIntensitePhares = analogRead(iIntensitePhares)     ;
 
 
@@ -137,14 +137,6 @@ void loop()
     analogWrite(iPhares,1);                                       // Les phares s'allument
   else                                                            // Sinon
     analogWrite(iPhares,0) ;                                      // Les phares ne s'allument pas
-    /*for (;i<255;i++) // i varie de 1 à 255
-    {
-    analogWrite(phares,i); // génère une impulsion sur la broche de largeur i => la luminosité augmente
-    }
-  for (;i>0;i--) // i varie de 1 à 255
-    {
-    analogWrite(phares,i); // génère une impulsion sur la broche de largeur i => la luminosité augmente
-    }*/
 
 
   // CLIGNOTANTS
