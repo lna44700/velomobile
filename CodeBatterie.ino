@@ -12,7 +12,7 @@ rgb_lcd MonEcran                 ;
 
 const byte ValeurCapteur = 2     ;                                    // Le capteur du compteur de vitesse est câblé à la broche numéro 2
 const byte numInterrupt = 0      ;                                    // Numéro de la broche d'interruption
-const int Periode = 500          ;                                    // Période en milliseconde, permet d'avoir la fréquence instantanée du passage de l'aimant
+const int Periode = 1000         ;                                    // Période en milliseconde, permet d'avoir la fréquence instantanée du passage de l'aimant
 
 float Tension (0.0)              ;                                    // tension de la batterie
 float Intensite  (0.0)           ;                                    // Intensite
@@ -29,10 +29,8 @@ char ChangementEtat (0)          ;                                    // Variabl
 char ValeurPrecedenteDist(0)     ;                                    // Variable qui va prendre la valeur de la variable ChangementEtat
 unsigned long Temps = 0L         ;
 unsigned long Intervalle = 0L    ;
-char Enregistrement(0)           ;                                    // Variable qui va compter le nombre de boucle pour enregistrer sur la carte SD
 float Perimetre (1.6)            ;                                    // Périmètre de la roue
-
-const int chipSelect = 10 ;
+const int chipSelect = 10        ;
 
 
 RTC_DS1307 RTC; //Classe RTC_DS1307
@@ -42,8 +40,7 @@ File Rapport ;                                                        // Va perm
 int Test     ;                                                        // Variable utilisée pour tester valeur renvoyée par fonctions SD Card
 
 Ticks  Compteur (numInterrupt, ValeurCapteur, Periode) ;              // Appel du constructeur de la librairie Ticks permettant d'avoir accès aux fonctions associées
-
-                                                      
+                                        
 
 class Batterie                                                        // Création de la classe Batterie
 {
@@ -272,7 +269,18 @@ void loop()
   if (Intervalle >= 1000)
   {
     EnvoyerBluetooth (Tension, Intensite, Puissance, Vitesse, Distance, Charge) ;   // Appel de la fonction permettant d'envoyer les données via bluetooth
-    Temps = TempsContinu                                                        ;
+
+    Rapport = SD.open("Rapport.CSV", FILE_WRITE)      ;
+    Rapport.print(Tension), Rapport.print(';')        ;
+    Rapport.print(Intensite), Rapport.print(';')      ;
+    Rapport.print(Puissance), Rapport.print(';')      ;
+    Rapport.print(Vitesse), Rapport.print(';')        ;
+    Rapport.print(Distance/1000), Rapport.print(';')  ;
+    Rapport.print(Charge), Rapport.print(';')         ;
+    Rapport.println()                                 ;
+    Rapport.close()                                   ;
+    
+    Temps = TempsContinu ;
   }
   
 
@@ -312,7 +320,18 @@ void loop()
       if (Intervalle >= 1000)
       {
         EnvoyerBluetooth (Tension, Intensite, Puissance, Vitesse, Distance, Charge) ;   // Appel de la fonction permettant d'envoyer les données via bluetooth
-        Temps = TempsContinu                                                        ;
+
+        Rapport = SD.open("Rapport.CSV", FILE_WRITE)      ;
+        Rapport.print(Tension), Rapport.print(';')        ;
+        Rapport.print(Intensite), Rapport.print(';')      ;
+        Rapport.print(Puissance), Rapport.print(';')      ;
+        Rapport.print(Vitesse), Rapport.print(';')        ;
+        Rapport.print(Distance/1000), Rapport.print(';')  ;
+        Rapport.print(Charge), Rapport.print(';')         ;
+        Rapport.println()                                 ;
+        Rapport.close()                                   ;
+        
+        Temps = TempsContinu ;
       }
 
       AfficherInfo(Tension, Intensite, Distance, Vitesse) ;
@@ -361,7 +380,18 @@ void loop()
       if (Intervalle >= 1000)
       {
         EnvoyerBluetooth (Tension, Intensite, Puissance, Vitesse, Distance, Charge) ;   // Appel de la fonction permettant d'envoyer les données via bluetooth
-        Temps = TempsContinu                                                        ;
+
+        Rapport = SD.open("Rapport.CSV", FILE_WRITE)      ;
+        Rapport.print(Tension), Rapport.print(';')        ;
+        Rapport.print(Intensite), Rapport.print(';')      ;
+        Rapport.print(Puissance), Rapport.print(';')      ;
+        Rapport.print(Vitesse), Rapport.print(';')        ;
+        Rapport.print(Distance/1000), Rapport.print(';')  ;
+        Rapport.print(Charge), Rapport.print(';')         ;
+        Rapport.println()                                 ;
+        Rapport.close()                                   ;
+        
+        Temps = TempsContinu ;
       }
 
       AfficherInfo2(Puissance, Charge) ; 
@@ -374,22 +404,5 @@ void loop()
     CompteurBoucle = 0 ;                                                  // Le CompteurBoucle est remis à zéro une fois que toutes les données ont été affichées
     MonEcran.clear()   ;
   }
-
-
-  if (Enregistrement = 200)                                               // Enregistrement des données sur la carte SD
-  {
-    Rapport = SD.open("Rapport.CSV", FILE_WRITE)      ;
-    Rapport.print(Tension), Rapport.print(';')        ;
-    Rapport.print(Intensite), Rapport.print(';')      ;
-    Rapport.print(Puissance), Rapport.print(';')      ;
-    Rapport.print(Vitesse), Rapport.print(';')        ;
-    Rapport.print(Distance/1000), Rapport.print(';')  ;
-    Rapport.print(Charge), Rapport.print(';')         ;
-    Rapport.println()                                 ;
-    Rapport.close() ;
-    Enregistrement = 0 ;
-  }
-  
-  Enregistrement++ ;                                                      // Incrémentation de l'enregistrement sur la carte SD
   CompteurBoucle++ ;                                                      // Incrémentation du CompteurBoucle
 }
