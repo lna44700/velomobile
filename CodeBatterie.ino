@@ -1,23 +1,26 @@
-#include <SoftwareSerial.h>                                            // Librairie permetteant de mettre en oeuvre le module Bluetooth
-#include <Wire.h>                                                      // Permet d'utiliser la communication I2C
-#include "rgb_lcd.h"                                                   // Librairie de l'écran LCD
-#include <Ticks.h>                                                     // Compte des impulsions sur un certains laps de temps et en déduis la fréquence
+#include <RTClib.h>                                                   // Ulisation de l'horloge temps réel
+#include <SD.h>                                                       // Librairie permettant de sauvegarder des informations sur une carte SD
+#include <SPI.h>                                                      // Permet d'utiliser la communication via le bus SPI de l'arduino
+#include <SoftwareSerial.h>                                           // Librairie permetteant de mettre en oeuvre le module Bluetooth
+#include <Wire.h>                                                     // Permet d'utiliser la communication I2C
+#include "rgb_lcd.h"                                                  // Librairie de l'écran LCD
+#include <Ticks.h>                                                    // Compte des impulsions sur un certains laps de temps et en déduis la fréquence
 
-SoftwareSerial Bluetooth(10, 11) ;                                     // RX | TX
+
+SoftwareSerial Bluetooth(10, 11) ;                                    // RX | TX
 rgb_lcd MonEcran                 ;
 
 const byte ValeurCapteur = 2     ;                                    // Le capteur du compteur de vitesse est câblé à la broche numéro 2
 const byte numInterrupt = 0      ;                                    // Numéro de la broche d'interruption
-const int Periode = 1000         ;                                    // Période en milliseconde, permet d'avoir la fréquence instantanée du passage de l'aimant
+const int Periode = 500          ;                                    // Période en milliseconde, permet d'avoir la fréquence instantanée du passage de l'aimant
 
 float Tension (0.0)              ;                                    // tension de la batterie
 float Intensite  (0.0)           ;                                    // Intensite
-float Puissance (0.0)            ;                                    // Puissance délivrée par la batterie principale
+int Puissance (0.0)              ;                                    // Puissance délivrée par la batterie principale
 float Charge (0.0)               ;                                    // Etat de charge de la batterie
 float Vitesse (0.0)              ;                                    // Vitesse du vélo
 float Distance (0.0)             ;                                    // Distance parcourue par le vélo
-float RayonRoue (0.254)          ;                                    // Rayon de la roue du vélo
-char Aimant (0)                  ;                                    // Passage de l'aimant du compteur de vitesse
+float Aimant (0)                 ;                                    // Passage de l'aimant du compteur de vitesse
 int  BoutonChoixEcran (0)        ;                                    // Bouton permettant d'afficher sur l'écran LCD les tensions, l'intensité, la puissance et la distance parcourue
 int CompteurBoucle (0)           ;                                    // Variable qui compte le nombre de fois que la boucle loop() à été faite
 char ValeurPrecedente(0)         ;                                    // Valeur précédente du bouton permettant de bloquer l'écran
@@ -26,10 +29,21 @@ char ChangementEtat (0)          ;                                    // Variabl
 char ValeurPrecedenteDist(0)     ;                                    // Variable qui va prendre la valeur de la variable ChangementEtat
 unsigned long Temps = 0L         ;
 unsigned long Intervalle = 0L    ;
+char Enregistrement(0)           ;                                    // Variable qui va compter le nombre de boucle pour enregistrer sur la carte SD
+float Perimetre (1.6)            ;                                    // Périmètre de la roue
+
+const int chipSelect = 10 ;
+
+
+RTC_DS1307 RTC; //Classe RTC_DS1307
+
+File Rapport ;                                                        // Va permettre la création du fichier CSV
+
+int Test     ;                                                        // Variable utilisée pour tester valeur renvoyée par fonctions SD Card
 
 Ticks  Compteur (numInterrupt, ValeurCapteur, Periode) ;              // Appel du constructeur de la librairie Ticks permettant d'avoir accès aux fonctions associées
 
-float Perimetre = 2 * 3.14159265359 * RayonRoue      ;                // Périmètre de la roue
+                                                      
 
 class Batterie                                                        // Création de la classe Batterie
 {
@@ -117,7 +131,7 @@ float Batterie::CalculerPuissance(float Tension, float Intensite)
   return Puissance ;
 }
 
-float Batterie::ChargeBatterie(float Tension)
+float Batterie::ChargeBatterie(float Tension)                         // Calcul de la charge de la batterie (pourcentage)
 {
   Charge = (Tension * 100) / 40 ;
 
@@ -129,7 +143,8 @@ float Capteur::Get_Vitesse()
   Compteur.operate()                  ;                                // Fonction qui met à jour la fréquence instantanée
   Aimant = Compteur.TickRate1Period() ;                                // Nombre de passage de l'aimant par seconde
   Vitesse = Aimant * Perimetre * 3.6  ;                                // Calcul de la vitesse du vélo
-
+  
+  Serial.println(Vitesse) ;
   return Vitesse ;
 }
 
@@ -154,58 +169,31 @@ void EnvoyerBluetooth(float Tension, float Intensite, float Puissance,
   Bluetooth.println(Charge)          ;                                           // Affichage de la charge de la batterie sur le téléphone portable
 }
 
-void AfficherVitesse(float Vitesse)                               // Fonction d'affichage de la vitesse sur l'écran LCD
+void AfficherInfo(float Tension, float Intensite, float Distance, float Vitesse)      // Fonction d'affichage de la tension, de l'intensité, de la distance et de la vitesse sur l'écran LCD
 {
-  MonEcran.print("    Vitesse : ")   ;
-  MonEcran.setCursor(2, 16)          ;
-  MonEcran.print("   ")              ;
-  MonEcran.print(Vitesse)            ;
-  MonEcran.print(" km/h")            ;
+  MonEcran.setCursor(0, 0);// set the cursor to (0,0):
+  MonEcran.print(Tension);
+  MonEcran.print(" V ");
+  MonEcran.setCursor(8, 0);// 8ème Caractère de la ligne 0
+  MonEcran.print(Intensite);
+  MonEcran.print(" A ");
+
+  MonEcran.setCursor(0, 1);//  curseur Colonne 0 et Ligne 1
+  MonEcran.print(Distance/1000);
+  MonEcran.print("Km ");
+  MonEcran.setCursor(7, 1);//  curseur Colonne 9 de la ligne 1
+  MonEcran.print(Vitesse, 1);
+  MonEcran.print(" Km/h ");
 }
 
-void AfficherTension(float Tension)                               // Fonction d'affichage de la tension sur l'écran LCD
+void AfficherInfo2(int Puissance, float Charge)                           // Fonction d'affichage de la puisance délivrée et de la charge de la batterie sur l'écran LCD
 {
-  MonEcran.print("    Tension : ")   ;
-  MonEcran.setCursor(2, 16)          ;
-  MonEcran.print("   ")              ;
-  MonEcran.print(Tension)            ;
-  MonEcran.print("  V")              ;
-}
-
-void AfficherIntensite(float Intensite)                           // Fonction d'affichage de l'intensité sur l'écran LCD
-{
-  MonEcran.print("   Intensite : ")  ;
-  MonEcran.setCursor(2, 16)          ;
-  MonEcran.print("    ")             ;
-  MonEcran.print(Intensite)          ;
-  MonEcran.print(" A")               ;
-}
-
-void AfficherPuissance(float Puissance)                           // Fonction d'affichage de la puisance délivrée sur l'écran LCD
-{
-  MonEcran.print("   Puissance : ")  ;
-  MonEcran.setCursor(2, 16)          ;
-  MonEcran.print("   ")              ;
-  MonEcran.print(Puissance)          ;
-  MonEcran.print(" W")               ;
-}
-
-void AfficherDistance(float Distance)                             // Fonction d'affichage de la distance sur l'écran LCD
-{
-  MonEcran.print("   Distance : ") ;
-  MonEcran.setCursor(2, 16)        ;
-  MonEcran.print("    ")           ;
-  MonEcran.print(Distance)         ;
-  MonEcran.print(" km")            ;
-}
-
-void AfficherCharge(float Charge)                                 // Fonction d'affichage de l'état de charge de la batterie sur l'écran LCD
-{
-  MonEcran.print(" Charge Batterie : ") ;
-  MonEcran.setCursor(2, 16)             ;
-  MonEcran.print("      ")              ;
-  MonEcran.print(Charge)                ;
-  MonEcran.print(" %")                  ;
+  MonEcran.setCursor(0, 0);// set the cursor to (0,0):
+  MonEcran.print(Puissance);
+  MonEcran.print(" W ");
+  MonEcran.setCursor(8, 0);// 8ème Caractère de la ligne 0
+  MonEcran.print(Charge);
+  MonEcran.print(" % ");
 }
 
 
@@ -220,7 +208,10 @@ const int colorB = 255 ;                                               // Intens
 
 void setup()
 {
-  Serial.begin(9600)                      ;                            // Paramètre de la vitesse de transmission USB
+  Serial.begin(9600)                      ;   
+  Wire.begin()                            ;   
+  RTC.begin()                             ;                            // Démarrage de la librairie RTClib.h                          
+  Serial.println("\nInitialisation de la carte SD...") ;               // Paramètre de la vitesse de transmission USB
   Compteur.begin()                        ;
   pinMode (0, INPUT)                      ;                            // Déclaration de la broche où est câblé la batterie en Entrée
   pinMode (4, INPUT)                      ;                            // Déclaration de la broche où est câblé le bouton de changement d'affichage LCD
@@ -228,10 +219,28 @@ void setup()
   Bluetooth.begin(9600)                   ;                            // Vitesse de transmission du bluetooth
   MonEcran.begin(16, 2)                   ;                            // Déclaration de l'affichage de l'écran LCD
   MonEcran.setRGB(colorR, colorG, colorB) ;                            // Couleur d'affichage de l'écran LCD
+  pinMode(53, OUTPUT)                     ;
+  SD.begin(10,11,12,13)                   ;
+ 
+  
+  if (! RTC.isrunning())                                                     // Si RTC ne fonctionne pas
+  {
+    Serial.println("RTC ne fonctionne pas !") ;
+    RTC.adjust(DateTime(__DATE__, __TIME__))  ;                             // Met à l'heure à date à laquelle le sketch est compilé
+  }
+
+  Test = SD.remove("Rapport.CSV") ;                                         // Si le fichier existe alors il est supprimé
+
+  Rapport = SD.open("Rapport.CSV", FILE_WRITE) ;                            // Création du fichier Rapport.CSV
+  Rapport.println("Tension;Intensite;Puissance;Vitesse;Distance;Charge") ;
+  Rapport.close();
 }
 
 void loop()
 {
+  //Affichage de l'heure
+  DateTime now = RTC.now();
+  
   Bouton = digitalRead(4) ;                                            // Lecture de l'état du bouton de blocage de l'écran
   
   if (Bouton == 1 && Bouton != ValeurPrecedente)                       // Condition de changement d'état
@@ -245,7 +254,7 @@ void loop()
   Intensite = BatterieVelo.Get_Intensite()                       ;     // Enregitrement du retour de la méthode Get_Intensite dans la variable Intensite
   Puissance = BatterieVelo.CalculerPuissance(Tension, Intensite) ;     // Enregitrement du retour de la méthode CalculerPuissance dans la variable Puissance
   Vitesse = CapteurVitesse.Get_Vitesse()                         ;     // Enregitrement du retour de la méthode Get_Vitesse dans la variable Vitesse
-  Charge = BatterieVelo.ChargeBatterie(Tension)                  ;     //Enregistrement du retour de la méthode ChargeBatterie dans la variable Charge
+  Charge = BatterieVelo.ChargeBatterie(Tension)                  ;     // Enregistrement du retour de la méthode ChargeBatterie dans la variable Charge
 
   ChangementEtat = digitalRead(2) ;                                    // Lecture de l'état du capteur de vitesse
 
@@ -269,9 +278,9 @@ void loop()
 
   if (CompteurBoucle < 100)
   {
-    AfficherVitesse(Vitesse) ;                                            // Appel de la méthode d'affichage de la vitesse
+    AfficherInfo(Tension, Intensite, Distance, Vitesse) ;                 // Appel de la méthode d'affichage de la Tension, de l'intensité, de la distance et de la vitesse
 
-    while (BoutonChoixEcran == 1)                                         // Si le bouton de blocage à été appuyer alors l'affichage reste sur la vitesse
+    while (BoutonChoixEcran == 1)                                         // Si le bouton de blocage à été appuyer alors l'affichage reste sur les informations en cours
     {
       Bouton = digitalRead(4) ;                                           // Lecture de l'état du bouton de blocage de l'écran
   
@@ -287,7 +296,7 @@ void loop()
       Intensite = BatterieVelo.Get_Intensite()                       ;     // Enregitrement du retour de la méthode Get_Intensite dans la variable Intensite
       Puissance = BatterieVelo.CalculerPuissance(Tension, Intensite) ;     // Enregitrement du retour de la méthode CalculerPuissance dans la variable Puissance
       Vitesse = CapteurVitesse.Get_Vitesse()                         ;     // Enregitrement du retour de la méthode Get_Vitesse dans la variable Vitesse
-      Charge = BatterieVelo.ChargeBatterie(Tension)                  ;     //Enregistrement du retour de la méthode ChargeBatterie dans la variable Charge
+      Charge = BatterieVelo.ChargeBatterie(Tension)                  ;     // Enregistrement du retour de la méthode ChargeBatterie dans la variable Charge
 
       ChangementEtat = digitalRead(2) ;
 
@@ -306,7 +315,7 @@ void loop()
         Temps = TempsContinu                                                        ;
       }
 
-      AfficherVitesse(Vitesse) ;
+      AfficherInfo(Tension, Intensite, Distance, Vitesse) ;
     }
   }
 
@@ -318,9 +327,9 @@ void loop()
 
   if (CompteurBoucle > 100 && CompteurBoucle < 200)
   {
-    AfficherTension(Tension) ;                                               // Appel de la méthode d'affichage de la tension
+    AfficherInfo2(Puissance, Charge) ;                                       // Appel de la méthode d'affichage de la puisance et de la charge de la batterie
 
-    while (BoutonChoixEcran == 1)                                            // Si le bouton de blocage à été appuyer alors l'affichage reste sur la tension
+    while (BoutonChoixEcran == 1)                                            // Si le bouton de blocage à été appuyer alors l'affichage reste sur les informations en cours
     {
       Bouton = digitalRead(4) ;                                              // Lecture de l'état du bouton de blocage de l'écran
   
@@ -336,209 +345,13 @@ void loop()
       Intensite = BatterieVelo.Get_Intensite()                       ;     // Enregitrement du retour de la méthode Get_Intensite dans la variable Intensite
       Puissance = BatterieVelo.CalculerPuissance(Tension, Intensite) ;     // Enregitrement du retour de la méthode CalculerPuissance dans la variable Puissance
       Vitesse = CapteurVitesse.Get_Vitesse()                         ;     // Enregitrement du retour de la méthode Get_Vitesse dans la variable Vitesse
-      Charge = BatterieVelo.ChargeBatterie(Tension)                  ;     //Enregistrement du retour de la méthode ChargeBatterie dans la variable Charge
-
-      ChangementEtat = digitalRead(2) ;
-
-      if (ChangementEtat == 1 && ChangementEtat != ValeurPrecedenteDist)
-      {
-        Distance = Perimetre + Distance ;                                     
-      }
-      ValeurPrecedenteDist = ChangementEtat ;
-
-      unsigned long TempsContinu = millis() ;
-      Intervalle = TempsContinu - Temps     ;
-
-      if (Intervalle >= 1000)
-      {
-        EnvoyerBluetooth (Tension, Intensite, Puissance, Vitesse, Distance, Charge) ;   // Appel de la fonction permettant d'envoyer les données via bluetooth
-        Temps = TempsContinu                                                        ;
-      }
-
-      AfficherTension(Tension) ;
-    }
-  }
-
-  if (CompteurBoucle == 200)
-  {
-    MonEcran.clear() ;
-  }
-
-
-  if (CompteurBoucle > 200 && CompteurBoucle < 300)
-  {
-    AfficherIntensite(Intensite) ;                                          // Appel de la méthode d'affichage de l'intensité
-
-    while (BoutonChoixEcran == 1)                                           // Si le bouton de blocage à été appuyer alors l'affichage reste sur l'intensité
-    {
-      Bouton = digitalRead(4) ;                                           // Lecture de l'état du bouton de blocage de l'écran
-  
-      if (Bouton == 1 && Bouton != ValeurPrecedente)                      // Condition de changement d'état
-      {
-        BoutonChoixEcran = 0 ;
-        CompteurBoucle = 300  ;
-      }
-  
-      ValeurPrecedente = Bouton ; 
-      
-      Tension = BatterieVelo.Get_Tension()                           ;     // Enregitrement du retour de la méthode Get_Tension dans la variable Tension
-      Intensite = BatterieVelo.Get_Intensite()                       ;     // Enregitrement du retour de la méthode Get_Intensite dans la variable Intensite
-      Puissance = BatterieVelo.CalculerPuissance(Tension, Intensite) ;     // Enregitrement du retour de la méthode CalculerPuissance dans la variable Puissance
-      Vitesse = CapteurVitesse.Get_Vitesse()                         ;     // Enregitrement du retour de la méthode Get_Vitesse dans la variable Vitesse
-      Charge = BatterieVelo.ChargeBatterie(Tension)                  ;     //Enregistrement du retour de la méthode ChargeBatterie dans la variable Charge
-
-      ChangementEtat = digitalRead(2) ;
-
-      if (ChangementEtat == 1 && ChangementEtat != ValeurPrecedenteDist)
-      {
-        Distance = Perimetre + Distance ;                                     
-      }
-      ValeurPrecedenteDist = ChangementEtat ;
-      
-      unsigned long TempsContinu = millis() ;
-      Intervalle = TempsContinu - Temps     ;
-
-      if (Intervalle >= 1000)
-      {
-        EnvoyerBluetooth (Tension, Intensite, Puissance, Vitesse, Distance, Charge) ;   // Appel de la fonction permettant d'envoyer les données via bluetooth
-        Temps = TempsContinu                                                ;
-      }
-
-      AfficherIntensite(Intensite) ;
-    }
-  }
-
-
-  if (CompteurBoucle == 300)
-  {
-    MonEcran.clear() ;
-  }
-
-
-  if (CompteurBoucle > 300 && CompteurBoucle < 400)
-  {
-    AfficherPuissance(Puissance) ;                                        // Appel de la méthode d'affichage de la puissance
-
-    while (BoutonChoixEcran == 1)                                         // Si le bouton de blocage à été appuyer alors l'affichage reste sur la puissance
-    {
-      Bouton = digitalRead(4) ;                                           // Lecture de l'état du bouton de blocage de l'écran
-  
-      if (Bouton == 1 && Bouton != ValeurPrecedente)                      // Condition de changement d'état
-      {
-        BoutonChoixEcran = 0  ;
-        CompteurBoucle = 400  ;
-      }
-  
-      ValeurPrecedente = Bouton ; 
-      
-      Tension = BatterieVelo.Get_Tension()                           ;     // Enregitrement du retour de la méthode Get_Tension dans la variable Tension
-      Intensite = BatterieVelo.Get_Intensite()                       ;     // Enregitrement du retour de la méthode Get_Intensite dans la variable Intensite
-      Puissance = BatterieVelo.CalculerPuissance(Tension, Intensite) ;     // Enregitrement du retour de la méthode CalculerPuissance dans la variable Puissance
-      Vitesse = CapteurVitesse.Get_Vitesse()                         ;     // Enregitrement du retour de la méthode Get_Vitesse dans la variable Vitesse
-      Charge = BatterieVelo.ChargeBatterie(Tension)                  ;     //Enregistrement du retour de la méthode ChargeBatterie dans la variable Charge
-
-      ChangementEtat = digitalRead(2) ;
-
-      if (ChangementEtat == 1 && ChangementEtat != ValeurPrecedenteDist)
-      {
-        Distance = Perimetre + Distance ;                                    
-      }
-      ValeurPrecedenteDist = ChangementEtat ;
-
-      unsigned long TempsContinu = millis() ;
-      Intervalle = TempsContinu - Temps     ;
-
-      if (Intervalle >= 1000)
-      {
-        EnvoyerBluetooth (Tension, Intensite, Puissance, Vitesse, Distance) ;   // Appel de la fonction permettant d'envoyer les données via bluetooth
-        Temps = TempsContinu                                                ;
-      }
-
-      AfficherPuissance(Puissance) ;
-    }
-  }
-
-
-  if (CompteurBoucle == 400)
-  {
-    MonEcran.clear() ;
-  }
-
-  if (CompteurBoucle > 400 && CompteurBoucle < 500)
-  {
-    AfficherDistance(Distance / 1000) ;                                   // Appel de la méthode d'affichage de la distance
-
-    while (BoutonChoixEcran == 1)                                         // Si le bouton de blocage à été appuyer alors l'affichage reste sur la distance
-    {
-      Bouton = digitalRead(4) ;                                           // Lecture de l'état du bouton de blocage de l'écran
-  
-      if (Bouton == 1 && Bouton != ValeurPrecedente)                      // Condition de changement d'état
-      {
-        BoutonChoixEcran = 0  ;
-        CompteurBoucle = 500  ;
-      }
-  
-      ValeurPrecedente = Bouton ; 
-      
-      Tension = BatterieVelo.Get_Tension()                           ;     // Enregitrement du retour de la méthode Get_Tension dans la variable Tension
-      Intensite = BatterieVelo.Get_Intensite()                       ;     // Enregitrement du retour de la méthode Get_Intensite dans la variable Intensite
-      Puissance = BatterieVelo.CalculerPuissance(Tension, Intensite) ;     // Enregitrement du retour de la méthode CalculerPuissance dans la variable Puissance
-      Vitesse = CapteurVitesse.Get_Vitesse()                         ;     // Enregitrement du retour de la méthode Get_Vitesse dans la variable Vitesse
-      Charge = BatterieVelo.ChargeBatterie(Tension)                  ;     //Enregistrement du retour de la méthode ChargeBatterie dans la variable Charge
-
-      ChangementEtat = digitalRead(2) ;
-
-      if (ChangementEtat == 1 && ChangementEtat != ValeurPrecedenteDist)
-      {
-        Distance = Perimetre + Distance ;                                     // Calcul de la distance parcourue
-      }
-      ValeurPrecedenteDist = ChangementEtat ;
-
-      unsigned long TempsContinu = millis() ;
-      Intervalle = TempsContinu - Temps     ;
-
-      if (Intervalle >= 1000)
-      {
-        EnvoyerBluetooth (Tension, Intensite, Puissance, Vitesse, Distance, Charge) ;   // Appel de la fonction permettant d'envoyer les données via bluetooth
-        Temps = TempsContinu                                                        ;
-      }
-
-      AfficherDistance(Distance / 1000) ;
-    }
-  }
-
-  if (CompteurBoucle == 500)
-  {
-    MonEcran.clear() ;
-  }
-
-  if (CompteurBoucle > 500 && CompteurBoucle < 600)
-  {
-    AfficherCharge(Charge) ;                                              // Appel de la méthode d'affichage de la distance
-
-    while (BoutonChoixEcran == 1)                                         // Si le bouton de blocage à été appuyer alors l'affichage reste sur la distance
-    {
-      Bouton = digitalRead(4) ;                                           // Lecture de l'état du bouton de blocage de l'écran
-  
-      if (Bouton == 1 && Bouton != ValeurPrecedente)                      // Condition de changement d'état
-      {
-        BoutonChoixEcran = 0  ;
-        CompteurBoucle = 600  ;
-      }
-  
-      ValeurPrecedente = Bouton ; 
-      
-      Tension = BatterieVelo.Get_Tension()                           ;     // Enregitrement du retour de la méthode Get_Tension dans la variable Tension
-      Intensite = BatterieVelo.Get_Intensite()                       ;     // Enregitrement du retour de la méthode Get_Intensite dans la variable Intensite
-      Puissance = BatterieVelo.CalculerPuissance(Tension, Intensite) ;     // Enregitrement du retour de la méthode CalculerPuissance dans la variable Puissance
-      Vitesse = CapteurVitesse.Get_Vitesse()                         ;     // Enregitrement du retour de la méthode Get_Vitesse dans la variable Vitesse
       Charge = BatterieVelo.ChargeBatterie(Tension)                  ;     // Enregistrement du retour de la méthode ChargeBatterie dans la variable Charge
 
       ChangementEtat = digitalRead(2) ;
 
       if (ChangementEtat == 1 && ChangementEtat != ValeurPrecedenteDist)
       {
-        Distance = Perimetre + Distance ;                                     // Calcul de la distance parcourue
+        Distance = Perimetre + Distance ;                                     
       }
       ValeurPrecedenteDist = ChangementEtat ;
 
@@ -551,15 +364,32 @@ void loop()
         Temps = TempsContinu                                                        ;
       }
 
-      AfficherCharge(Charge) ;
+      AfficherInfo2(Puissance, Charge) ; 
     }
   }
 
-
-  if (CompteurBoucle > 600)
+  
+  if (CompteurBoucle > 200)
   {
     CompteurBoucle = 0 ;                                                  // Le CompteurBoucle est remis à zéro une fois que toutes les données ont été affichées
     MonEcran.clear()   ;
   }
+
+
+  if (Enregistrement = 200)                                               // Enregistrement des données sur la carte SD
+  {
+    Rapport = SD.open("Rapport.CSV", FILE_WRITE)      ;
+    Rapport.print(Tension), Rapport.print(';')        ;
+    Rapport.print(Intensite), Rapport.print(';')      ;
+    Rapport.print(Puissance), Rapport.print(';')      ;
+    Rapport.print(Vitesse), Rapport.print(';')        ;
+    Rapport.print(Distance/1000), Rapport.print(';')  ;
+    Rapport.print(Charge), Rapport.print(';')         ;
+    Rapport.println()                                 ;
+    Rapport.close() ;
+    Enregistrement = 0 ;
+  }
+  
+  Enregistrement++ ;                                                      // Incrémentation de l'enregistrement sur la carte SD
   CompteurBoucle++ ;                                                      // Incrémentation du CompteurBoucle
 }
