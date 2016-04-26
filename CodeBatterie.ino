@@ -6,6 +6,7 @@
 #include "rgb_lcd.h"                                                  // Librairie de l'écran LCD
 #include <Ticks.h>                                                    // Compte des impulsions sur un certains laps de temps et en déduis la fréquence
 
+#define LOG_INTERVAL 1000
 
 SoftwareSerial Bluetooth(10, 11) ;                                    // RX | TX
 rgb_lcd MonEcran                 ;
@@ -16,7 +17,10 @@ const int Periode = 1000         ;                                    // Périod
 
 float Tension (0.0)              ;                                    // tension de la batterie
 float Intensite  (0.0)           ;                                    // Intensite
+float Capacite (0.0)             ;                                    // Capacité de la batterie en Ah
 int Puissance (0.0)              ;                                    // Puissance délivrée par la batterie principale
+float PuissanceConsommee (0.0)   ;                                    // Puissance consommée par la batterie en Wh
+float PuissanceConsommeeKM (0.0) ;                                    // Puissance consommée par kilomètre par la batterie en Wh/km
 float Charge (0.0)               ;                                    // Etat de charge de la batterie
 float Vitesse (0.0)              ;                                    // Vitesse du vélo
 float Distance (0.0)             ;                                    // Distance parcourue par le vélo
@@ -31,6 +35,8 @@ unsigned long Temps = 0L         ;
 unsigned long Intervalle = 0L    ;
 float Perimetre (1.6)            ;                                    // Périmètre de la roue
 const int chipSelect = 10        ;
+
+
 
 
 RTC_DS1307 RTC; //Classe RTC_DS1307
@@ -61,18 +67,28 @@ class Batterie                                                        // Créati
     float ChargeBatterie (float Tension)                     ;
 };
 
-class Capteur                                                         // Création de la classe Capteur
+class CapteurVitesse                                                   // Création de la classe CapteurVitesse
 {
   private:                                                            // Attributs
     float Vitesse     ;
-    float Temperature ;
 
   public:                                                             // Méthodes
-    Capteur()  ;
-    ~Capteur() ;
+    CapteurVitesse()  ;
+    ~CapteurVitesse() ;
 
-    float Get_Vitesse ()     ;                                        // Méthode d'acquisition de la vitesse
-    float Get_Temperature () ;                                        // Méthode d'acquisition de la température
+    float Get_Vitesse ()     ;                                       // Méthode d'acquisition de la vitesse                                     
+};
+
+class CapteurTemperature                                             // Création de la classe CapteurTemperature
+{
+  private:
+    float Temperature ;
+
+  public:
+    CapteurTemperature()  ;
+    ~CapteurTemperature() ;
+
+    float Get_Temperature() ;                                        // Méthode d'acquisition de la température
 };
 
 Batterie::Batterie():
@@ -92,16 +108,25 @@ Batterie::~Batterie()
   this->Charge = 0.0    ;
 }
 
-Capteur::Capteur():
-  Vitesse(0.0),
+CapteurVitesse::CapteurVitesse():
+  Vitesse(0.0)
+{
+
+}
+
+CapteurVitesse::~CapteurVitesse()
+{
+  this->Vitesse = 0.0     ;
+}
+
+CapteurTemperature::CapteurTemperature():
   Temperature(0.0)
 {
 
 }
 
-Capteur::~Capteur()
+CapteurTemperature::~CapteurTemperature()
 {
-  this->Vitesse = 0.0     ;
   this->Temperature = 0.0 ;
 }
 
@@ -135,7 +160,7 @@ float Batterie::ChargeBatterie(float Tension)                         // Calcul 
   return Charge ;
 }
 
-float Capteur::Get_Vitesse()
+float CapteurVitesse::Get_Vitesse()
 {
   Compteur.operate()                  ;                                // Fonction qui met à jour la fréquence instantanée
   Aimant = Compteur.TickRate1Period() ;                                // Nombre de passage de l'aimant par seconde
@@ -145,7 +170,7 @@ float Capteur::Get_Vitesse()
   return Vitesse ;
 }
 
-float Capteur::Get_Temperature()
+float CapteurTemperature::Get_Temperature()
 {
 
 }
@@ -194,9 +219,9 @@ void AfficherInfo2(int Puissance, float Charge)                           // Fon
 }
 
 
-Batterie BatterieVelo      ;
-Capteur CapteurVitesse     ;
-Capteur CapteurTemperature ;
+Batterie BatterieVelo                 ;
+CapteurVitesse CapteurVitesse         ;
+CapteurTemperature CapteurTemperature ;
 
 const int colorR = 255 ;                                               // Intensité de la couleur Rouge de l'écran LCD
 const int colorG = 255 ;                                               // Intensité de la couleur Vert de l'écran LCD
@@ -205,10 +230,10 @@ const int colorB = 255 ;                                               // Intens
 
 void setup()
 {
-  Serial.begin(9600)                      ;   
+  Serial.begin(9600)                      ;                            // Paramètre de la vitesse de transmission USB
   Wire.begin()                            ;   
   RTC.begin()                             ;                            // Démarrage de la librairie RTClib.h                          
-  Serial.println("\nInitialisation de la carte SD...") ;               // Paramètre de la vitesse de transmission USB
+  Serial.println("\nInitialisation de la carte SD...") ;               
   Compteur.begin()                        ;
   pinMode (0, INPUT)                      ;                            // Déclaration de la broche où est câblé la batterie en Entrée
   pinMode (4, INPUT)                      ;                            // Déclaration de la broche où est câblé le bouton de changement d'affichage LCD
@@ -229,7 +254,7 @@ void setup()
   Test = SD.remove("Rapport.CSV") ;                                         // Si le fichier existe alors il est supprimé
 
   Rapport = SD.open("Rapport.CSV", FILE_WRITE) ;                            // Création du fichier Rapport.CSV
-  Rapport.println("Tension;Intensite;Puissance;Vitesse;Distance;Charge") ;
+  Rapport.println("Tension;Intensite;Puissance;Vitesse;Distance;Charge;Puissance Consommee (Wh);Puissance Consommee par Km (Wh/km);Capacite (Ah)") ;
   Rapport.close();
 }
 
@@ -253,6 +278,10 @@ void loop()
   Vitesse = CapteurVitesse.Get_Vitesse()                         ;     // Enregitrement du retour de la méthode Get_Vitesse dans la variable Vitesse
   Charge = BatterieVelo.ChargeBatterie(Tension)                  ;     // Enregistrement du retour de la méthode ChargeBatterie dans la variable Charge
 
+  Capacite = Capacite + Intensite * (LOG_INTERVAL / 1000) / 3600 ;
+  PuissanceConsommee = Capacite * Tension                        ;
+  PuissanceConsommeeKM = PuissanceConsommee / Distance           ;
+  
   ChangementEtat = digitalRead(2) ;                                    // Lecture de l'état du capteur de vitesse
 
   if (ChangementEtat == 1 && ChangementEtat != ValeurPrecedenteDist)
@@ -270,21 +299,24 @@ void loop()
   {
     EnvoyerBluetooth (Tension, Intensite, Puissance, Vitesse, Distance, Charge) ;   // Appel de la fonction permettant d'envoyer les données via bluetooth
 
-    Rapport = SD.open("Rapport.CSV", FILE_WRITE)      ;
-    Rapport.print(Tension), Rapport.print(';')        ;
-    Rapport.print(Intensite), Rapport.print(';')      ;
-    Rapport.print(Puissance), Rapport.print(';')      ;
-    Rapport.print(Vitesse), Rapport.print(';')        ;
-    Rapport.print(Distance/1000), Rapport.print(';')  ;
-    Rapport.print(Charge), Rapport.print(';')         ;
-    Rapport.println()                                 ;
-    Rapport.close()                                   ;
+    Rapport = SD.open("Rapport.CSV", FILE_WRITE)            ;
+    Rapport.print(Tension), Rapport.print(';')              ;
+    Rapport.print(Intensite), Rapport.print(';')            ;
+    Rapport.print(Puissance), Rapport.print(';')            ;
+    Rapport.print(Vitesse), Rapport.print(';')              ;
+    Rapport.print(Distance/1000), Rapport.print(';')        ;
+    Rapport.print(Charge), Rapport.print(';')               ;
+    Rapport.print(PuissanceConsommee), Rapport.print(';')   ;
+    Rapport.print(PuissanceConsommeeKM), Rapport.print(';') ;
+    Rapport.print(Capacite), Rapport.print(';')             ;
+    Rapport.println()                                       ;
+    Rapport.close()                                         ;
     
     Temps = TempsContinu ;
   }
   
 
-  if (CompteurBoucle < 100)
+  if (CompteurBoucle < 200)
   {
     AfficherInfo(Tension, Intensite, Distance, Vitesse) ;                 // Appel de la méthode d'affichage de la Tension, de l'intensité, de la distance et de la vitesse
 
@@ -295,7 +327,7 @@ void loop()
       if (Bouton == 1 && Bouton != ValeurPrecedente)                      // Condition de changement d'état
       {
         BoutonChoixEcran = 0  ;
-        CompteurBoucle = 100  ;
+        CompteurBoucle = 200  ;
       }
   
       ValeurPrecedente = Bouton ;  
@@ -306,6 +338,10 @@ void loop()
       Vitesse = CapteurVitesse.Get_Vitesse()                         ;     // Enregitrement du retour de la méthode Get_Vitesse dans la variable Vitesse
       Charge = BatterieVelo.ChargeBatterie(Tension)                  ;     // Enregistrement du retour de la méthode ChargeBatterie dans la variable Charge
 
+      Capacite = Capacite + Intensite * (LOG_INTERVAL / 1000) / 3600 ;
+      PuissanceConsommee = Capacite * Tension                        ;
+      PuissanceConsommeeKM = PuissanceConsommee / Distance           ;
+
       ChangementEtat = digitalRead(2) ;
 
       if (ChangementEtat == 1 && ChangementEtat != ValeurPrecedenteDist)
@@ -321,15 +357,18 @@ void loop()
       {
         EnvoyerBluetooth (Tension, Intensite, Puissance, Vitesse, Distance, Charge) ;   // Appel de la fonction permettant d'envoyer les données via bluetooth
 
-        Rapport = SD.open("Rapport.CSV", FILE_WRITE)      ;
-        Rapport.print(Tension), Rapport.print(';')        ;
-        Rapport.print(Intensite), Rapport.print(';')      ;
-        Rapport.print(Puissance), Rapport.print(';')      ;
-        Rapport.print(Vitesse), Rapport.print(';')        ;
-        Rapport.print(Distance/1000), Rapport.print(';')  ;
-        Rapport.print(Charge), Rapport.print(';')         ;
-        Rapport.println()                                 ;
-        Rapport.close()                                   ;
+        Rapport = SD.open("Rapport.CSV", FILE_WRITE)            ;
+        Rapport.print(Tension), Rapport.print(';')              ;
+        Rapport.print(Intensite), Rapport.print(';')            ;
+        Rapport.print(Puissance), Rapport.print(';')            ;
+        Rapport.print(Vitesse), Rapport.print(';')              ;
+        Rapport.print(Distance/1000), Rapport.print(';')        ;
+        Rapport.print(Charge), Rapport.print(';')               ;
+        Rapport.print(PuissanceConsommee), Rapport.print(';')   ;
+        Rapport.print(PuissanceConsommeeKM), Rapport.print(';') ;
+        Rapport.print(Capacite), Rapport.print(';')             ;
+        Rapport.println()                                       ;
+        Rapport.close()                                         ;
         
         Temps = TempsContinu ;
       }
@@ -338,13 +377,13 @@ void loop()
     }
   }
 
-  if (CompteurBoucle == 100)
+  if (CompteurBoucle == 200)
   {
     MonEcran.clear() ;
   }
 
 
-  if (CompteurBoucle > 100 && CompteurBoucle < 200)
+  if (CompteurBoucle > 200 && CompteurBoucle < 400)
   {
     AfficherInfo2(Puissance, Charge) ;                                       // Appel de la méthode d'affichage de la puisance et de la charge de la batterie
 
@@ -355,7 +394,7 @@ void loop()
       if (Bouton == 1 && Bouton != ValeurPrecedente)                         // Condition de changement d'état
       {
         BoutonChoixEcran = 0  ;
-        CompteurBoucle = 200  ;
+        CompteurBoucle = 400  ;
       }
   
       ValeurPrecedente = Bouton ; 
@@ -365,6 +404,10 @@ void loop()
       Puissance = BatterieVelo.CalculerPuissance(Tension, Intensite) ;     // Enregitrement du retour de la méthode CalculerPuissance dans la variable Puissance
       Vitesse = CapteurVitesse.Get_Vitesse()                         ;     // Enregitrement du retour de la méthode Get_Vitesse dans la variable Vitesse
       Charge = BatterieVelo.ChargeBatterie(Tension)                  ;     // Enregistrement du retour de la méthode ChargeBatterie dans la variable Charge
+
+      Capacite = Capacite + Intensite * (LOG_INTERVAL / 1000) / 3600 ;
+      PuissanceConsommee = Capacite * Tension                        ;
+      PuissanceConsommeeKM = PuissanceConsommee / Distance           ;
 
       ChangementEtat = digitalRead(2) ;
 
@@ -381,15 +424,18 @@ void loop()
       {
         EnvoyerBluetooth (Tension, Intensite, Puissance, Vitesse, Distance, Charge) ;   // Appel de la fonction permettant d'envoyer les données via bluetooth
 
-        Rapport = SD.open("Rapport.CSV", FILE_WRITE)      ;
-        Rapport.print(Tension), Rapport.print(';')        ;
-        Rapport.print(Intensite), Rapport.print(';')      ;
-        Rapport.print(Puissance), Rapport.print(';')      ;
-        Rapport.print(Vitesse), Rapport.print(';')        ;
-        Rapport.print(Distance/1000), Rapport.print(';')  ;
-        Rapport.print(Charge), Rapport.print(';')         ;
-        Rapport.println()                                 ;
-        Rapport.close()                                   ;
+        Rapport = SD.open("Rapport.CSV", FILE_WRITE)            ;
+        Rapport.print(Tension), Rapport.print(';')              ;
+        Rapport.print(Intensite), Rapport.print(';')            ;
+        Rapport.print(Puissance), Rapport.print(';')            ;
+        Rapport.print(Vitesse), Rapport.print(';')              ;
+        Rapport.print(Distance/1000), Rapport.print(';')        ;
+        Rapport.print(Charge), Rapport.print(';')               ;
+        Rapport.print(PuissanceConsommee), Rapport.print(';')   ;
+        Rapport.print(PuissanceConsommeeKM), Rapport.print(';') ;
+        Rapport.print(Capacite), Rapport.print(';')             ;
+        Rapport.println()                                       ;
+        Rapport.close()                                         ;
         
         Temps = TempsContinu ;
       }
@@ -399,7 +445,7 @@ void loop()
   }
 
   
-  if (CompteurBoucle > 200)
+  if (CompteurBoucle > 400)
   {
     CompteurBoucle = 0 ;                                                  // Le CompteurBoucle est remis à zéro une fois que toutes les données ont été affichées
     MonEcran.clear()   ;
