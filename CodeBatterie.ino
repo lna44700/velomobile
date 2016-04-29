@@ -13,7 +13,7 @@ rgb_lcd MonEcran                 ;
 
 const byte ValeurCapteur = 2     ;                                    // Le capteur du compteur de vitesse est câblé à la broche numéro 2
 const byte numInterrupt = 0      ;                                    // Numéro de la broche d'interruption
-const int Periode = 1000         ;                                    // Période en milliseconde, permet d'avoir la fréquence instantanée du passage de l'aimant
+const int Periode = 500          ;                                    // Période en milliseconde, permet d'avoir la fréquence instantanée du passage de l'aimant
 
 float Tension (0.0)              ;                                    // tension de la batterie
 float Intensite  (0.0)           ;                                    // Intensite
@@ -132,16 +132,16 @@ CapteurTemperature::~CapteurTemperature()
 
 float Batterie::Get_Tension()
 {
-  Tension = analogRead (0)        ;                                    // Lire la Tension délivrée par la batterie
-  Tension = (Tension * 40) / 1023 ;                                    // Calcul permettant d'afficher la tension en volt
+  Tension = analogRead (0)               ;                              // Lire la Tension délivrée par la batterie
+  Tension = Tension * 5 / 1023 * 10.2854 ;                              // Calcul permettant d'afficher la tension en volt
 
   return Tension ;
 }
 
 float Batterie::Get_Intensite()
 {
-  Intensite = analogRead (2)          ;                                // Lire l'intensité délivrée par la batterie principal
-  Intensite = (Intensite * 25) / 1023 ;                                // Calcul permettant d'afficher l'intensité en ampère
+  Intensite = analogRead (2)                           ;               // Lire l'intensité délivrée par la batterie principal
+  Intensite = (Intensite * 5 / 1053) * (73.3 / 5) - 37 ;               // Calcul permettant d'afficher l'intensité en ampère
 
   return Intensite ;
 }
@@ -166,7 +166,6 @@ float CapteurVitesse::Get_Vitesse()
   Aimant = Compteur.TickRate1Period() ;                                // Nombre de passage de l'aimant par seconde
   Vitesse = Aimant * Perimetre * 3.6  ;                                // Calcul de la vitesse du vélo
   
-  Serial.println(Vitesse) ;
   return Vitesse ;
 }
 
@@ -208,14 +207,18 @@ void AfficherInfo(float Tension, float Intensite, float Distance, float Vitesse)
   MonEcran.print(" Km/h ");
 }
 
-void AfficherInfo2(int Puissance, float Charge)                           // Fonction d'affichage de la puisance délivrée et de la charge de la batterie sur l'écran LCD
+void AfficherInfo2(int Puissance, float Capacite, float PuissanceConsommee)                           // Fonction d'affichage de la puisance délivrée et de la capacité de la batterie sur l'écran LCD
 {
   MonEcran.setCursor(0, 0);// set the cursor to (0,0):
   MonEcran.print(Puissance);
   MonEcran.print(" W ");
   MonEcran.setCursor(8, 0);// 8ème Caractère de la ligne 0
-  MonEcran.print(Charge);
-  MonEcran.print(" % ");
+  MonEcran.print(Capacite);
+  MonEcran.print(" Ah ");
+
+  MonEcran.setCursor(0, 1) ;
+  MonEcran.print(PuissanceConsommee) ;
+  MonEcran.print(" Wh ") ;
 }
 
 
@@ -245,7 +248,7 @@ void setup()
   SD.begin(10,11,12,13)                   ;
  
   
-  if (! RTC.isrunning())                                                     // Si RTC ne fonctionne pas
+  if (! RTC.isrunning())                                                    // Si RTC ne fonctionne pas
   {
     Serial.println("RTC ne fonctionne pas !") ;
     RTC.adjust(DateTime(__DATE__, __TIME__))  ;                             // Met à l'heure à date à laquelle le sketch est compilé
@@ -385,7 +388,7 @@ void loop()
 
   if (CompteurBoucle > 200 && CompteurBoucle < 400)
   {
-    AfficherInfo2(Puissance, Charge) ;                                       // Appel de la méthode d'affichage de la puisance et de la charge de la batterie
+    AfficherInfo2(Puissance, Capacite, PuissanceConsommee) ;                                       // Appel de la méthode d'affichage de la puisance et de la charge de la batterie
 
     while (BoutonChoixEcran == 1)                                            // Si le bouton de blocage à été appuyer alors l'affichage reste sur les informations en cours
     {
@@ -440,7 +443,7 @@ void loop()
         Temps = TempsContinu ;
       }
 
-      AfficherInfo2(Puissance, Charge) ; 
+      AfficherInfo2(Puissance, Capacite, PuissanceConsommee) ; 
     }
   }
 
