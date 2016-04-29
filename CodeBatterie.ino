@@ -8,7 +8,9 @@
  * Programme de récupération d'information concernant le Vélomobile, batterie, vitesse, distance.
  *
  */
-
+ 
+#include <Adafruit_Sensor.h>
+#include <Adafruit_TMP006.h>
 #include <RTClib.h>                                                   // Ulisation de l'horloge temps réel
 #include <SD.h>                                                       // Librairie permettant de sauvegarder des informations sur une carte SD
 #include <SPI.h>                                                      // Permet d'utiliser la communication via le bus SPI de l'arduino
@@ -17,10 +19,13 @@
 #include "rgb_lcd.h"                                                  // Librairie de l'écran LCD
 #include <Ticks.h>                                                    // Compte des impulsions sur un certains laps de temps et en déduis la fréquence
 
-#define LOG_INTERVAL 1000
+#define LOG_INTERVAL 1000                                             // Permet de relever les données plus rapidement
 
 SoftwareSerial Bluetooth(10, 11) ;                                    // RX | TX
-rgb_lcd MonEcran                 ;
+rgb_lcd MonEcran                 ;                                    // Création de l'objet MonEcran de type rgb_lcd
+Adafruit_TMP006 tmp006           ;
+
+
 
 const byte ValeurCapteur = 2     ;                                    // Le capteur du compteur de vitesse est câblé à la broche numéro 2
 const byte numInterrupt = 0      ;                                    // Numéro de la broche d'interruption
@@ -42,15 +47,16 @@ char ValeurPrecedente(0)         ;                                    // Valeur 
 char Bouton (0)                  ;                                    // Variable qui va prendre la valeur de la lecture du bouton de blocage de l'écran
 char ChangementEtat (0)          ;                                    // Variable qui enregistre l'état précédant le passage de l'aimant devant le capteur
 char ValeurPrecedenteDist(0)     ;                                    // Variable qui va prendre la valeur de la variable ChangementEtat
-unsigned long Temps = 0L         ;
-unsigned long Intervalle = 0L    ;
+unsigned long Temps = 0L         ;                                    // Variable de temps qui prendra la valeur du temps actuel
+unsigned long Intervalle = 0L    ;                                    // Variable qui permet de définir un intervalle de temps
 float Perimetre (1.6)            ;                                    // Périmètre de la roue
-const int chipSelect = 10        ;
+const int chipSelect = 10        ;                                    // Selection de la broche pour utiliser la librairie RTC
+float Temperature (0.0)          ;                                    // Température du moteur
 
 
 
 
-RTC_DS1307 RTC; //Classe RTC_DS1307
+RTC_DS1307 RTC;                                                       //Classe RTC_DS1307                                   
 
 File Rapport ;                                                        // Va permettre la création du fichier CSV
 
@@ -123,7 +129,7 @@ class CapteurTemperature                                             // Créatio
     float Get_Temperature() ;                                        // Méthode d'acquisition de la température
 };
 
-Batterie::Batterie():
+Batterie::Batterie():                                                // Constructeur
   Tension(0.0),
   Intensite(0.0),
   Puissance(0.0),
@@ -132,7 +138,7 @@ Batterie::Batterie():
 
 }
 
-Batterie::~Batterie()
+Batterie::~Batterie()                                                // Destructeur
 {
   this->Tension = 0.0   ;
   this->Intensite = 0.0 ;
@@ -140,24 +146,24 @@ Batterie::~Batterie()
   this->Charge = 0.0    ;
 }
 
-CapteurVitesse::CapteurVitesse():
+CapteurVitesse::CapteurVitesse():                                    // Constructeur
   Vitesse(0.0)
 {
 
 }
 
-CapteurVitesse::~CapteurVitesse()
+CapteurVitesse::~CapteurVitesse()                                    // Destructeur
 {
   this->Vitesse = 0.0     ;
 }
 
-CapteurTemperature::CapteurTemperature():
+CapteurTemperature::CapteurTemperature():                            // Constructeur
   Temperature(0.0)
 {
 
 }
 
-CapteurTemperature::~CapteurTemperature()
+CapteurTemperature::~CapteurTemperature()                            // Destructeur
 {
   this->Temperature = 0.0 ;
 }
@@ -173,7 +179,7 @@ float Batterie::Get_Tension()
 float Batterie::Get_Intensite()
 {
   Intensite = analogRead (2)                           ;               // Lire l'intensité délivrée par la batterie principal
-  Intensite = (Intensite * 5 / 1053) * (73.3 / 5) - 37 ;               // Calcul permettant d'afficher l'intensité en ampère
+  Intensite = (Intensite * 5 / 1023) * (73.3 / 5) - 37 ;               // Calcul permettant d'afficher l'intensité en ampère
 
   return Intensite ;
 }
@@ -220,7 +226,7 @@ float CapteurVitesse::Get_Vitesse()
 
 float CapteurTemperature::Get_Temperature()
 {
-  Temperature = tmp006.readObjTempC() ;
+  Temperature = tmp006.readObjTempC() ;                               // Mesure de la température
 
   return Temperature ;
 }
@@ -282,7 +288,7 @@ void AfficherInfo(float Tension, float Intensite, float Distance, float Vitesse)
  * @param PuissanceConsommee est la puissance consommée par la batterie en Wattheure
  */
 
-void AfficherInfo2(int Puissance, float Capacite, float PuissanceConsommee)                           // Fonction d'affichage de la puisance délivrée et de la capacité de la batterie sur l'écran LCD
+void AfficherInfo2(int Puissance, float Capacite, float PuissanceConsommee)             // Fonction d'affichage de la puisance délivrée et de la capacité de la batterie sur l'écran LCD
 {
   MonEcran.setCursor(0, 0);// set the cursor to (0,0):
   MonEcran.print(Puissance);
@@ -321,18 +327,18 @@ const int colorB = 255 ;                                               // Intens
 void setup()
 {
   Serial.begin(9600)                      ;                            // Paramètre de la vitesse de transmission USB
-  Wire.begin()                            ;   
+  Wire.begin()                            ;                            // Permet d'utiliser le bus I2C (Inter-Integrated Circuit)
   RTC.begin()                             ;                            // Démarrage de la librairie RTClib.h                          
-  Serial.println("\nInitialisation de la carte SD...") ;               
-  Compteur.begin()                        ;
+  Serial.println("\nInitialisation de la carte SD...") ;               // Affichage sur le moniteur
+  Compteur.begin()                        ;                            // Démarre le processus de la librairie Ticks pour le compteur de vitesse
   pinMode (0, INPUT)                      ;                            // Déclaration de la broche où est câblé la batterie en Entrée
   pinMode (4, INPUT)                      ;                            // Déclaration de la broche où est câblé le bouton de changement d'affichage LCD
   pinMode (2, INPUT)                      ;                            // Déclaration de la broche où est câblé le capteur de courant de la batterie principale
   Bluetooth.begin(9600)                   ;                            // Vitesse de transmission du bluetooth
   MonEcran.begin(16, 2)                   ;                            // Déclaration de l'affichage de l'écran LCD
   MonEcran.setRGB(colorR, colorG, colorB) ;                            // Couleur d'affichage de l'écran LCD
-  pinMode(53, OUTPUT)                     ;
-  SD.begin(10,11,12,13)                   ;
+  pinMode(53, OUTPUT)                     ;                            // Déclaration de la broche 53 en sortie : sauvegarde sur la carte SD
+  SD.begin(10,11,12,13)                   ;                            // Déclaration des broches à utiliser pour la gestion de la carte SD
  
   
   if (! RTC.isrunning())                                                    // Si RTC ne fonctionne pas
@@ -355,8 +361,7 @@ void setup()
 
 void loop()
 {
-  //Affichage de l'heure
-  DateTime now = RTC.now();
+  DateTime now = RTC.now();                                            // Actualise la date de la bibliothèque RTC
   
   Bouton = digitalRead(4) ;                                            // Lecture de l'état du bouton de blocage de l'écran
   
@@ -372,10 +377,11 @@ void loop()
   Puissance = BatterieVelo.CalculerPuissance(Tension, Intensite) ;     // Enregitrement du retour de la méthode CalculerPuissance dans la variable Puissance
   Vitesse = CapteurVitesse.Get_Vitesse()                         ;     // Enregitrement du retour de la méthode Get_Vitesse dans la variable Vitesse
   Charge = BatterieVelo.ChargeBatterie(Tension)                  ;     // Enregistrement du retour de la méthode ChargeBatterie dans la variable Charge
+  Temperature = CapteurTemperature.Get_Temperature()             ;     // Enregistrement du retour de la méthode Get_Temperature dans la variable Temperature
 
-  Capacite = Capacite + Intensite * (LOG_INTERVAL / 1000) / 3600 ;
-  PuissanceConsommee = Capacite * Tension                        ;
-  PuissanceConsommeeKM = PuissanceConsommee / Distance           ;
+  Capacite = Capacite + Intensite * (LOG_INTERVAL / 1000) / 3600 ;     // Calcul de la capacité de la batterie restante
+  PuissanceConsommee = Capacite * Tension                        ;     // Calcul de la puissance consommée
+  PuissanceConsommeeKM = PuissanceConsommee / Distance           ;     // Calcul de la puissance consommée par kilomètre
   
   ChangementEtat = digitalRead(2) ;                                    // Lecture de l'état du capteur de vitesse
 
@@ -386,11 +392,11 @@ void loop()
   
   ValeurPrecedenteDist = ChangementEtat ;                              // Enregistrement de l'état actuel du capteur
 
-  unsigned long TempsContinu = millis() ;
+  unsigned long TempsContinu = millis() ;                              // Variable de temps
   
-  Intervalle = TempsContinu - Temps ;
+  Intervalle = TempsContinu - Temps ;                                  // Intervalle de temps qui permet d'effctuer une action de manière régulière et connu.
 
-  if (Intervalle >= 1000)
+  if (Intervalle >= 1000)                                              // Toute les secondes s'effectuera les actions présentent dans la condition.
   {
     EnvoyerBluetooth (Tension, Intensite, Puissance, Vitesse, Distance, Charge) ;   // Appel de la fonction permettant d'envoyer les données via bluetooth
 
@@ -407,7 +413,7 @@ void loop()
     Rapport.println()                                       ;
     Rapport.close()                                         ;
     
-    Temps = TempsContinu ;
+    Temps = TempsContinu ;                                             // Mise à jour de la variable de Temps (variable tempon)
   }
   
 
@@ -432,10 +438,11 @@ void loop()
       Puissance = BatterieVelo.CalculerPuissance(Tension, Intensite) ;     // Enregitrement du retour de la méthode CalculerPuissance dans la variable Puissance
       Vitesse = CapteurVitesse.Get_Vitesse()                         ;     // Enregitrement du retour de la méthode Get_Vitesse dans la variable Vitesse
       Charge = BatterieVelo.ChargeBatterie(Tension)                  ;     // Enregistrement du retour de la méthode ChargeBatterie dans la variable Charge
+      Temperature = CapteurTemperature.Get_Temperature()             ;     // Enregistrement du retour de la méthode Get_Temperature dans la variable Temperature
 
-      Capacite = Capacite + Intensite * (LOG_INTERVAL / 1000) / 3600 ;
-      PuissanceConsommee = Capacite * Tension                        ;
-      PuissanceConsommeeKM = PuissanceConsommee / Distance           ;
+      Capacite = Capacite + Intensite * (LOG_INTERVAL / 1000) / 3600 ;     // Calcul de la capacité de la batterie restante
+      PuissanceConsommee = Capacite * Tension                        ;     // Calcul de la puissance consommée
+      PuissanceConsommeeKM = PuissanceConsommee / Distance           ;     // Calcul de la puissance consommée par kilomètre
 
       ChangementEtat = digitalRead(2) ;
 
@@ -480,7 +487,7 @@ void loop()
 
   if (CompteurBoucle > 200 && CompteurBoucle < 400)
   {
-    AfficherInfo2(Puissance, Capacite, PuissanceConsommee) ;                                       // Appel de la méthode d'affichage de la puisance et de la charge de la batterie
+    AfficherInfo2(Puissance, Capacite, PuissanceConsommee) ;                 // Appel de la méthode d'affichage de la puisance et de la charge de la batterie
 
     while (BoutonChoixEcran == 1)                                            // Si le bouton de blocage à été appuyer alors l'affichage reste sur les informations en cours
     {
@@ -499,10 +506,11 @@ void loop()
       Puissance = BatterieVelo.CalculerPuissance(Tension, Intensite) ;     // Enregitrement du retour de la méthode CalculerPuissance dans la variable Puissance
       Vitesse = CapteurVitesse.Get_Vitesse()                         ;     // Enregitrement du retour de la méthode Get_Vitesse dans la variable Vitesse
       Charge = BatterieVelo.ChargeBatterie(Tension)                  ;     // Enregistrement du retour de la méthode ChargeBatterie dans la variable Charge
+      Temperature = CapteurTemperature.Get_Temperature()             ;     // Enregistrement du retour de la méthode Get_Temperature dans la variable Temperature
 
-      Capacite = Capacite + Intensite * (LOG_INTERVAL / 1000) / 3600 ;
-      PuissanceConsommee = Capacite * Tension                        ;
-      PuissanceConsommeeKM = PuissanceConsommee / Distance           ;
+      Capacite = Capacite + Intensite * (LOG_INTERVAL / 1000) / 3600 ;     // Calcul de la capacité de la batterie restante
+      PuissanceConsommee = Capacite * Tension                        ;     // Calcul de la puissance consommée
+      PuissanceConsommeeKM = PuissanceConsommee / Distance           ;     // Calcul de la puissance consommée par kilomètre
 
       ChangementEtat = digitalRead(2) ;
 
