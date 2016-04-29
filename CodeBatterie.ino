@@ -1,3 +1,14 @@
+/**
+ * @file CodeBatterie.c
+ * @brief Programme de tests.
+ * @author Guillaume.F
+ * @version 12
+ * @date 29 Avril 2016
+ *
+ * Programme de récupération d'information concernant le Vélomobile, batterie, vitesse, distance.
+ *
+ */
+
 #include <RTClib.h>                                                   // Ulisation de l'horloge temps réel
 #include <SD.h>                                                       // Librairie permettant de sauvegarder des informations sur une carte SD
 #include <SPI.h>                                                      // Permet d'utiliser la communication via le bus SPI de l'arduino
@@ -46,7 +57,14 @@ File Rapport ;                                                        // Va perm
 int Test     ;                                                        // Variable utilisée pour tester valeur renvoyée par fonctions SD Card
 
 Ticks  Compteur (numInterrupt, ValeurCapteur, Periode) ;              // Appel du constructeur de la librairie Ticks permettant d'avoir accès aux fonctions associées
-                                        
+
+/**
+ * @class Batterie
+ * @brief Objet Batterie.
+ *
+ * Batterie représente la batterie moteur du Vélomobile, elle est définie par une tension, 
+ * une intensite et sa capacite. 
+ */
 
 class Batterie                                                        // Création de la classe Batterie
 {
@@ -67,6 +85,13 @@ class Batterie                                                        // Créati
     float ChargeBatterie (float Tension)                     ;
 };
 
+/**
+ * @class CapteurVitesse
+ * @brief Objet Capteur de vitesse.
+ *
+ * Capteur qui va calculer la vitesse du Vélomobile.
+ */
+
 class CapteurVitesse                                                   // Création de la classe CapteurVitesse
 {
   private:                                                            // Attributs
@@ -78,6 +103,13 @@ class CapteurVitesse                                                   // Créat
 
     float Get_Vitesse ()     ;                                       // Méthode d'acquisition de la vitesse                                     
 };
+
+/**
+ * @class CapteurTemperature
+ * @brief Objet Capteur de temperature.
+ *
+ * Capteur qui va calculer la temperature du moteur du Vélomobile.
+ */
 
 class CapteurTemperature                                             // Création de la classe CapteurTemperature
 {
@@ -146,6 +178,13 @@ float Batterie::Get_Intensite()
   return Intensite ;
 }
 
+/**
+ * @brief Fonction qui permet de calculer la puissance délivrée par la batterie
+ * @param Tension est la tension délivrée par la batterie
+ * @param Intensite est le courant délivré par la batterie
+ * @return Puissance
+ */
+
 float Batterie::CalculerPuissance(float Tension, float Intensite)
 {
   Puissance = Tension * Intensite   ;                                  // Calcul de la puissance délivrée par la batterie principale
@@ -160,6 +199,11 @@ float Batterie::ChargeBatterie(float Tension)                         // Calcul 
   return Charge ;
 }
 
+/**
+ * @brief Fonction qui calcule la vitesse du Vélomobile
+ * @return Vitesse
+ */
+
 float CapteurVitesse::Get_Vitesse()
 {
   Compteur.operate()                  ;                                // Fonction qui met à jour la fréquence instantanée
@@ -169,10 +213,26 @@ float CapteurVitesse::Get_Vitesse()
   return Vitesse ;
 }
 
+/**
+ * @brief Fonction qui calcule la température du moteur
+ * @return Temperature
+ */
+
 float CapteurTemperature::Get_Temperature()
 {
+  Temperature = tmp006.readObjTempC() ;
 
+  return Temperature ;
 }
+
+/**
+ * @brief Methode qui permet d'envoyer de toutes les informations récupérées en bluetooth vers le smartphone Android
+ * @param Tension est la tension délivrée par la batterie
+ * @param Intensite est le courant délivré par la batterie
+ * @param Puissance est la puissance délivrée par la batterie
+ * @param Vitesse est la vitesse du Vélomobile
+ * @param Distance est la distance parcourue par l'utilisateur
+ */
 
 void EnvoyerBluetooth(float Tension, float Intensite, float Puissance,
                       float Vitesse, float Distance, float Charge)               // Fonction d'affichage de la tension, de l'intensité, de la vitesse, de la distance sur smartphone
@@ -189,6 +249,14 @@ void EnvoyerBluetooth(float Tension, float Intensite, float Puissance,
 
   Bluetooth.println(Charge)          ;                                           // Affichage de la charge de la batterie sur le téléphone portable
 }
+
+/**
+ * @brief Methode qui permet l'affichage des informations sur l'écran LCD
+ * @param Tension est la tension délivrée par la batterie
+ * @param Intensite est le courant délivré par la batterie
+ * @param Vitesse est la vitesse du Vélomobile
+ * @param Distance est la distance parcourue par l'utilisateur
+ */
 
 void AfficherInfo(float Tension, float Intensite, float Distance, float Vitesse)      // Fonction d'affichage de la tension, de l'intensité, de la distance et de la vitesse sur l'écran LCD
 {
@@ -207,6 +275,13 @@ void AfficherInfo(float Tension, float Intensite, float Distance, float Vitesse)
   MonEcran.print(" Km/h ");
 }
 
+/**
+ * @brief Methode qui permet l'affichage des informations sur l'écran LCD
+ * @param Puissance est la puissance délivrée par la batterie
+ * @param Capacite est la capacité de la batterie restante
+ * @param PuissanceConsommee est la puissance consommée par la batterie en Wattheure
+ */
+
 void AfficherInfo2(int Puissance, float Capacite, float PuissanceConsommee)                           // Fonction d'affichage de la puisance délivrée et de la capacité de la batterie sur l'écran LCD
 {
   MonEcran.setCursor(0, 0);// set the cursor to (0,0):
@@ -221,15 +296,27 @@ void AfficherInfo2(int Puissance, float Capacite, float PuissanceConsommee)     
   MonEcran.print(" Wh ") ;
 }
 
+/**
+ * @li Creation de l'objet BatterieVelo de type Batterie
+ * @li Creation de l'objet CapteurVitesse
+ * @li Creation de l'objet CapteurTemperature
+ */
 
 Batterie BatterieVelo                 ;
 CapteurVitesse CapteurVitesse         ;
 CapteurTemperature CapteurTemperature ;
 
+/**
+ * @brief Definition des couleurs d'affichage de l'écran LCD
+ */
+
 const int colorR = 255 ;                                               // Intensité de la couleur Rouge de l'écran LCD
 const int colorG = 255 ;                                               // Intensité de la couleur Vert de l'écran LCD
 const int colorB = 255 ;                                               // Intensité de la couleur Bleu de l'écran LCD
 
+/**
+ * @brief Définition des entrées / sorties de la carte Arduino, démarrage des librairies utilisées
+ */
 
 void setup()
 {
@@ -260,6 +347,11 @@ void setup()
   Rapport.println("Tension;Intensite;Puissance;Vitesse;Distance;Charge;Puissance Consommee (Wh);Puissance Consommee par Km (Wh/km);Capacite (Ah)") ;
   Rapport.close();
 }
+
+/**
+ * @fn void loop (void)
+ * @brief Entrée du programme
+ */
 
 void loop()
 {
