@@ -9,8 +9,8 @@
  *
  */
  
-#include <Adafruit_Sensor.h>
-#include <Adafruit_TMP006.h>
+#include <Adafruit_Sensor.h>                                          // Librairie permettant d'uriliser les capteur adafruif
+#include <Adafruit_TMP006.h>                                          // Librairie du capteur de température
 #include <RTClib.h>                                                   // Ulisation de l'horloge temps réel
 #include <SD.h>                                                       // Librairie permettant de sauvegarder des informations sur une carte SD
 #include <SPI.h>                                                      // Permet d'utiliser la communication via le bus SPI de l'arduino
@@ -98,12 +98,12 @@ class Batterie                                                        // Créati
  * Capteur qui va calculer la vitesse du Vélomobile.
  */
 
-class CapteurVitesse                                                   // Création de la classe CapteurVitesse
+class CapteurVitesse                                                 // Création de la classe CapteurVitesse
 {
-  private:                                                            // Attributs
+  private:                                                           // Attributs
     float Vitesse     ;
 
-  public:                                                             // Méthodes
+  public:                                                            // Méthodes
     CapteurVitesse()  ;
     ~CapteurVitesse() ;
 
@@ -168,6 +168,11 @@ CapteurTemperature::~CapteurTemperature()                            // Destruct
   this->Temperature = 0.0 ;
 }
 
+/**
+ * @brief Fonction qui mesure la tension délivrée par la batterie
+ * @return Tension
+ */
+
 float Batterie::Get_Tension()
 {
   Tension = analogRead (0)               ;                              // Lire la Tension délivrée par la batterie
@@ -175,6 +180,11 @@ float Batterie::Get_Tension()
 
   return Tension ;
 }
+
+/**
+ * @brief Fonction qui mesure le courant délivré par la batterie
+ * @return Intensite
+ */
 
 float Batterie::Get_Intensite()
 {
@@ -198,7 +208,13 @@ float Batterie::CalculerPuissance(float Tension, float Intensite)
   return Puissance ;
 }
 
-float Batterie::ChargeBatterie(float Tension)                         // Calcul de la charge de la batterie (pourcentage)
+/**
+ * @brief Fonction qui calcule la charge de la batterie
+ * @return Charge
+ */
+
+
+float Batterie::ChargeBatterie(float Tension)                          // Calcul de la charge de la batterie (pourcentage)
 {
   Charge = (Tension * 100) / 40 ;
 
@@ -226,7 +242,7 @@ float CapteurVitesse::Get_Vitesse()
 
 float CapteurTemperature::Get_Temperature()
 {
-  Temperature = tmp006.readObjTempC() ;                               // Mesure de la température
+  Temperature = tmp006.readObjTempC() ;                                // Mesure de la température
 
   return Temperature ;
 }
@@ -266,17 +282,17 @@ void EnvoyerBluetooth(float Tension, float Intensite, float Puissance,
 
 void AfficherInfo(float Tension, float Intensite, float Distance, float Vitesse)      // Fonction d'affichage de la tension, de l'intensité, de la distance et de la vitesse sur l'écran LCD
 {
-  MonEcran.setCursor(0, 0);// set the cursor to (0,0):
+  MonEcran.setCursor(0, 0);                       // Positionne le curseur à la colonne 0 et à la ligne 0
   MonEcran.print(Tension);
   MonEcran.print(" V ");
-  MonEcran.setCursor(8, 0);// 8ème Caractère de la ligne 0
+  MonEcran.setCursor(8, 0);                       // 8ème Caractère de la ligne 0
   MonEcran.print(Intensite);
   MonEcran.print(" A ");
 
-  MonEcran.setCursor(0, 1);//  curseur Colonne 0 et Ligne 1
+  MonEcran.setCursor(0, 1);//  
   MonEcran.print(Distance/1000);
   MonEcran.print("Km ");
-  MonEcran.setCursor(7, 1);//  curseur Colonne 9 de la ligne 1
+  MonEcran.setCursor(7, 1);//  
   MonEcran.print(Vitesse, 1);
   MonEcran.print(" Km/h ");
 }
@@ -286,20 +302,24 @@ void AfficherInfo(float Tension, float Intensite, float Distance, float Vitesse)
  * @param Puissance est la puissance délivrée par la batterie
  * @param Capacite est la capacité de la batterie restante
  * @param PuissanceConsommee est la puissance consommée par la batterie en Wattheure
+ * @param Temperature est la température du moteur
  */
 
-void AfficherInfo2(int Puissance, float Capacite, float PuissanceConsommee)             // Fonction d'affichage de la puisance délivrée et de la capacité de la batterie sur l'écran LCD
+void AfficherInfo2(int Puissance, float Capacite, float PuissanceConsommee, float Temperature)             // Fonction d'affichage de la puisance délivrée et de la capacité de la batterie sur l'écran LCD
 {
-  MonEcran.setCursor(0, 0);// set the cursor to (0,0):
-  MonEcran.print(Puissance);
-  MonEcran.print(" W ");
-  MonEcran.setCursor(8, 0);// 8ème Caractère de la ligne 0
-  MonEcran.print(Capacite);
-  MonEcran.print(" Ah ");
+  MonEcran.setCursor(0, 0)  ;                       
+  MonEcran.print(Puissance) ;
+  MonEcran.print(" W ")     ;
+  MonEcran.setCursor(8, 0)  ;                       
+  MonEcran.print(Capacite)  ;
+  MonEcran.print(" Ah ")    ;
 
   MonEcran.setCursor(0, 1) ;
   MonEcran.print(PuissanceConsommee) ;
-  MonEcran.print(" Wh ") ;
+  MonEcran.print(" Wh ")             ;
+  MonEcran.setCursor(9, 1)           ;
+  MonEcran.print(Temperature)        ;
+  MonEcran.print(" C")               ;
 }
 
 /**
@@ -350,12 +370,13 @@ void setup()
   Test = SD.remove("Rapport.CSV") ;                                         // Si le fichier existe alors il est supprimé
 
   Rapport = SD.open("Rapport.CSV", FILE_WRITE) ;                            // Création du fichier Rapport.CSV
-  Rapport.println("Tension;Intensite;Puissance;Vitesse;Distance;Charge;Puissance Consommee (Wh);Puissance Consommee par Km (Wh/km);Capacite (Ah)") ;
+  Rapport.println("Tension;Intensite;Puissance;Vitesse;Distance;Charge;"
+                  "Puissance Consommee (Wh);Puissance Consommee par Km (Wh/km);"
+                  "Capacite (Ah)") ;
   Rapport.close();
 }
 
 /**
- * @fn void loop (void)
  * @brief Entrée du programme
  */
 
@@ -398,7 +419,7 @@ void loop()
 
   if (Intervalle >= 1000)                                              // Toute les secondes s'effectuera les actions présentent dans la condition.
   {
-    EnvoyerBluetooth (Tension, Intensite, Puissance, Vitesse, Distance, Charge) ;   // Appel de la fonction permettant d'envoyer les données via bluetooth
+    EnvoyerBluetooth (Tension, Intensite, Puissance, Vitesse, Distance, Capacite) ;   // Appel de la fonction permettant d'envoyer les données via bluetooth
 
     Rapport = SD.open("Rapport.CSV", FILE_WRITE)            ;
     Rapport.print(Tension), Rapport.print(';')              ;
@@ -413,7 +434,7 @@ void loop()
     Rapport.println()                                       ;
     Rapport.close()                                         ;
     
-    Temps = TempsContinu ;                                             // Mise à jour de la variable de Temps (variable tempon)
+    Temps = TempsContinu ;                                                // Mise à jour de la variable de Temps (variable tempon)
   }
   
 
@@ -457,7 +478,7 @@ void loop()
 
       if (Intervalle >= 1000)
       {
-        EnvoyerBluetooth (Tension, Intensite, Puissance, Vitesse, Distance, Charge) ;   // Appel de la fonction permettant d'envoyer les données via bluetooth
+        EnvoyerBluetooth (Tension, Intensite, Puissance, Vitesse, Distance, Capacite) ;   // Appel de la fonction permettant d'envoyer les données via bluetooth
 
         Rapport = SD.open("Rapport.CSV", FILE_WRITE)            ;
         Rapport.print(Tension), Rapport.print(';')              ;
@@ -487,7 +508,7 @@ void loop()
 
   if (CompteurBoucle > 200 && CompteurBoucle < 400)
   {
-    AfficherInfo2(Puissance, Capacite, PuissanceConsommee) ;                 // Appel de la méthode d'affichage de la puisance et de la charge de la batterie
+    AfficherInfo2(Puissance, Capacite, PuissanceConsommee, Temperature) ;                 // Appel de la méthode d'affichage de la puisance et de la charge de la batterie
 
     while (BoutonChoixEcran == 1)                                            // Si le bouton de blocage à été appuyer alors l'affichage reste sur les informations en cours
     {
@@ -525,7 +546,7 @@ void loop()
 
       if (Intervalle >= 1000)
       {
-        EnvoyerBluetooth (Tension, Intensite, Puissance, Vitesse, Distance, Charge) ;   // Appel de la fonction permettant d'envoyer les données via bluetooth
+        EnvoyerBluetooth (Tension, Intensite, Puissance, Vitesse, Distance, Capacite) ;   // Appel de la fonction permettant d'envoyer les données via bluetooth
 
         Rapport = SD.open("Rapport.CSV", FILE_WRITE)            ;
         Rapport.print(Tension), Rapport.print(';')              ;
@@ -543,7 +564,7 @@ void loop()
         Temps = TempsContinu ;
       }
 
-      AfficherInfo2(Puissance, Capacite, PuissanceConsommee) ; 
+      AfficherInfo2(Puissance, Capacite, PuissanceConsommee, Temperature) ; 
     }
   }
 
