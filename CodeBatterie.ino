@@ -18,12 +18,15 @@
 #include <Wire.h>                                                     // Permet d'utiliser la communication I2C
 #include "rgb_lcd.h"                                                  // Librairie de l'écran LCD
 #include <Ticks.h>                                                    // Compte des impulsions sur un certains laps de temps et en déduis la fréquence
+#include <TinyGPS.h>                                                  // Librairie permettant d'utiliser le module MonGPS
 
 #define LOG_INTERVAL 1000                                             // Permet de relever les données plus rapidement
 
 SoftwareSerial Bluetooth(10, 11) ;                                    // RX | TX
+SoftwareSerial GPS(12, 13)       ;                                    // Déclaration des broches RX | TX pour le module MonGPS
 rgb_lcd MonEcran                 ;                                    // Création de l'objet MonEcran de type rgb_lcd
-Adafruit_TMP006 tmp006           ;
+Adafruit_TMP006 tmp006           ;                                    // Création de l'objet tmp006 pour le capteur de température
+TinyGPS MonGPS                   ;                                    // Création de l'objet MonGPS
 
 
 
@@ -52,7 +55,15 @@ unsigned long Intervalle = 0L    ;                                    // Variabl
 float Perimetre (1.6)            ;                                    // Périmètre de la roue
 const int chipSelect = 10        ;                                    // Selection de la broche pour utiliser la librairie RTC
 float Temperature (0.0)          ;                                    // Température du moteur
+float Altitude (0.0)             ;
+char Date[32]                    ;
 
+static void gpsdump(TinyGPS &MonGPS);
+static bool feedgps();
+static void print_float(float val, float invalid, int len, int prec);
+static void print_int(unsigned long val, unsigned long invalid, int len);
+static void print_date(TinyGPS &gps);
+static void print_str(const char *str, int len);
 
 
 
@@ -282,19 +293,19 @@ void EnvoyerBluetooth(float Tension, float Intensite, float Puissance,
 
 void AfficherInfo(float Tension, float Intensite, float Distance, float Vitesse)      // Fonction d'affichage de la tension, de l'intensité, de la distance et de la vitesse sur l'écran LCD
 {
-  MonEcran.setCursor(0, 0);                       // Positionne le curseur à la colonne 0 et à la ligne 0
-  MonEcran.print(Tension);
-  MonEcran.print(" V ");
-  MonEcran.setCursor(8, 0);                       // 8ème Caractère de la ligne 0
-  MonEcran.print(Intensite);
-  MonEcran.print(" A ");
+  MonEcran.setCursor(0, 0)     ;                       // Positionne le curseur à la colonne 0 et à la ligne 0
+  MonEcran.print(Tension, 1)   ;
+  MonEcran.print(" V ")        ;
+  MonEcran.setCursor(8, 0)     ;                       // 8ème Caractère de la ligne 0
+  MonEcran.print(Intensite, 1) ;
+  MonEcran.print(" A ")        ;
 
-  MonEcran.setCursor(0, 1);//  
-  MonEcran.print(Distance/1000);
-  MonEcran.print("Km ");
-  MonEcran.setCursor(7, 1);//  
-  MonEcran.print(Vitesse, 1);
-  MonEcran.print(" Km/h ");
+  MonEcran.setCursor(0, 1)         ;
+  MonEcran.print(Distance/1000, 1) ;
+  MonEcran.print("Km ")            ;
+  MonEcran.setCursor(7, 1)         ;  
+  MonEcran.print(Vitesse, 1)       ;
+  MonEcran.print(" Km/h ")         ;
 }
 
 /**
@@ -307,19 +318,68 @@ void AfficherInfo(float Tension, float Intensite, float Distance, float Vitesse)
 
 void AfficherInfo2(int Puissance, float Capacite, float PuissanceConsommee, float Temperature)             // Fonction d'affichage de la puisance délivrée et de la capacité de la batterie sur l'écran LCD
 {
-  MonEcran.setCursor(0, 0)  ;                       
-  MonEcran.print(Puissance) ;
-  MonEcran.print(" W ")     ;
-  MonEcran.setCursor(8, 0)  ;                       
-  MonEcran.print(Capacite)  ;
-  MonEcran.print(" Ah ")    ;
+  MonEcran.setCursor(0, 0)     ;                       
+  MonEcran.print(Puissance)    ;
+  MonEcran.print(" W ")        ;
+  MonEcran.setCursor(8, 0)     ;                       
+  MonEcran.print(Capacite, 1)  ;
+  MonEcran.print(" Ah ")       ;
 
-  MonEcran.setCursor(0, 1) ;
-  MonEcran.print(PuissanceConsommee) ;
-  MonEcran.print(" Wh ")             ;
-  MonEcran.setCursor(9, 1)           ;
-  MonEcran.print(Temperature)        ;
-  MonEcran.print(" C")               ;
+  MonEcran.setCursor(0, 1)              ;
+  MonEcran.print(PuissanceConsommee, 1) ;
+  MonEcran.print(" Wh ")                ;
+  MonEcran.setCursor(9, 1)              ;
+  MonEcran.print(Temperature)           ;
+  MonEcran.print(" C")                  ;
+}
+
+static void gpsdump(TinyGPS &MonGPS)
+{
+  print_date(MonGPS);
+
+  Altitude = MonGPS.f_altitude() ;
+  Serial.println(MonGPS.f_altitude());
+}
+
+static void print_int(unsigned long val, unsigned long invalid, int len)
+{
+  //char Date[32];
+  if (val == invalid)
+    strcpy(Date, "*******");
+  else
+    sprintf(Date, "%ld", val);
+  Date[len] = 0;
+  for (int i=strlen(Date); i<len; ++i)
+    Date[i] = ' ';
+  if (len > 0) 
+    Date[len-1] = ' ';
+  Serial.print(Date);
+  feedMonGPS();
+}
+
+static void print_date(TinyGPS &MonGPS)
+{
+  int year;
+  byte month, day, hour, minute, second ;
+
+  MonGPS.crack_datetime(&year, &month, &day, &hour, &minute, &second);
+
+  //char Date[32];
+  sprintf(Date, "%02d/%02d/%02d %02d:%02d:%02d   ",
+          month, day, year, hour, minute, second);
+  Serial.print(Date);
+ 
+  feedMonGPS();
+}
+
+static bool feedMonGPS()
+{
+  while (GPS.available())
+  {
+    if (MonGPS.encode(GPS.read()))
+      return true;
+  }
+  return false;
 }
 
 /**
@@ -358,8 +418,9 @@ void setup()
   MonEcran.begin(16, 2)                   ;                            // Déclaration de l'affichage de l'écran LCD
   MonEcran.setRGB(colorR, colorG, colorB) ;                            // Couleur d'affichage de l'écran LCD
   pinMode(53, OUTPUT)                     ;                            // Déclaration de la broche 53 en sortie : sauvegarde sur la carte SD
-  SD.begin(10,11,12,13)                   ;                            // Déclaration des broches à utiliser pour la gestion de la carte SD
- 
+  SD.begin(53, 51, 50, 52)                ;                            // Déclaration des broches à utiliser pour la gestion de la carte SD
+  GPS.begin(9600)                         ;
+   DateTime now = RTC.now()               ;                                 // Actualise la date de la bibliothèque RTC
   
   if (! RTC.isrunning())                                                    // Si RTC ne fonctionne pas
   {
@@ -372,7 +433,7 @@ void setup()
   Rapport = SD.open("Rapport.CSV", FILE_WRITE) ;                            // Création du fichier Rapport.CSV
   Rapport.println("Tension;Intensite;Puissance;Vitesse;Distance;Charge;"
                   "Puissance Consommee (Wh);Puissance Consommee par Km (Wh/km);"
-                  "Capacite (Ah)") ;
+                  "Capacite (Ah);Altitude (m);Date") ;
   Rapport.close();
 }
 
@@ -382,7 +443,17 @@ void setup()
 
 void loop()
 {
-  DateTime now = RTC.now();                                            // Actualise la date de la bibliothèque RTC
+  bool newdata = false;
+  unsigned long start = millis();
+  
+  // Every second we print an update
+  while (millis() - start < 1000)
+  {
+    if (feedMonGPS())
+      newdata = true;
+  }
+
+  gpsdump(MonGPS);
   
   Bouton = digitalRead(4) ;                                            // Lecture de l'état du bouton de blocage de l'écran
   
@@ -401,7 +472,7 @@ void loop()
   Temperature = CapteurTemperature.Get_Temperature()             ;     // Enregistrement du retour de la méthode Get_Temperature dans la variable Temperature
 
   Capacite = Capacite + Intensite * (LOG_INTERVAL / 1000) / 3600 ;     // Calcul de la capacité de la batterie restante
-  PuissanceConsommee = Capacite * Tension                        ;     // Calcul de la puissance consommée
+  PuissanceConsommee = Intensite * Tension                        ;     // Calcul de la puissance consommée
   PuissanceConsommeeKM = PuissanceConsommee / Distance           ;     // Calcul de la puissance consommée par kilomètre
   
   ChangementEtat = digitalRead(2) ;                                    // Lecture de l'état du capteur de vitesse
@@ -431,6 +502,8 @@ void loop()
     Rapport.print(PuissanceConsommee), Rapport.print(';')   ;
     Rapport.print(PuissanceConsommeeKM), Rapport.print(';') ;
     Rapport.print(Capacite), Rapport.print(';')             ;
+    Rapport.print(Altitude), Rapport.print(';')             ;
+    Rapport.print(Date), Rapport.print(';')                 ;
     Rapport.println()                                       ;
     Rapport.close()                                         ;
     
@@ -438,7 +511,7 @@ void loop()
   }
   
 
-  if (CompteurBoucle < 200)
+  if (CompteurBoucle < 6)
   {
     AfficherInfo(Tension, Intensite, Distance, Vitesse) ;                 // Appel de la méthode d'affichage de la Tension, de l'intensité, de la distance et de la vitesse
 
@@ -449,7 +522,7 @@ void loop()
       if (Bouton == 1 && Bouton != ValeurPrecedente)                      // Condition de changement d'état
       {
         BoutonChoixEcran = 0  ;
-        CompteurBoucle = 200  ;
+        CompteurBoucle = 6  ;
       }
   
       ValeurPrecedente = Bouton ;  
@@ -462,7 +535,7 @@ void loop()
       Temperature = CapteurTemperature.Get_Temperature()             ;     // Enregistrement du retour de la méthode Get_Temperature dans la variable Temperature
 
       Capacite = Capacite + Intensite * (LOG_INTERVAL / 1000) / 3600 ;     // Calcul de la capacité de la batterie restante
-      PuissanceConsommee = Capacite * Tension                        ;     // Calcul de la puissance consommée
+      PuissanceConsommee = Intensite * Tension                       ;     // Calcul de la puissance consommée
       PuissanceConsommeeKM = PuissanceConsommee / Distance           ;     // Calcul de la puissance consommée par kilomètre
 
       ChangementEtat = digitalRead(2) ;
@@ -490,6 +563,8 @@ void loop()
         Rapport.print(PuissanceConsommee), Rapport.print(';')   ;
         Rapport.print(PuissanceConsommeeKM), Rapport.print(';') ;
         Rapport.print(Capacite), Rapport.print(';')             ;
+        Rapport.print(Altitude), Rapport.print(';')             ;
+        Rapport.print(Date), Rapport.print(';')                 ;
         Rapport.println()                                       ;
         Rapport.close()                                         ;
         
@@ -500,13 +575,13 @@ void loop()
     }
   }
 
-  if (CompteurBoucle == 200)
+  if (CompteurBoucle == 6)
   {
     MonEcran.clear() ;
   }
 
 
-  if (CompteurBoucle > 200 && CompteurBoucle < 400)
+  if (CompteurBoucle > 6 && CompteurBoucle < 12)
   {
     AfficherInfo2(Puissance, Capacite, PuissanceConsommee, Temperature) ;                 // Appel de la méthode d'affichage de la puisance et de la charge de la batterie
 
@@ -517,7 +592,7 @@ void loop()
       if (Bouton == 1 && Bouton != ValeurPrecedente)                         // Condition de changement d'état
       {
         BoutonChoixEcran = 0  ;
-        CompteurBoucle = 400  ;
+        CompteurBoucle = 12  ;
       }
   
       ValeurPrecedente = Bouton ; 
@@ -558,6 +633,8 @@ void loop()
         Rapport.print(PuissanceConsommee), Rapport.print(';')   ;
         Rapport.print(PuissanceConsommeeKM), Rapport.print(';') ;
         Rapport.print(Capacite), Rapport.print(';')             ;
+        Rapport.print(Altitude), Rapport.print(';')             ;
+        Rapport.print(Date), Rapport.print(';')                 ;
         Rapport.println()                                       ;
         Rapport.close()                                         ;
         
@@ -568,8 +645,7 @@ void loop()
     }
   }
 
-  
-  if (CompteurBoucle > 400)
+  if (CompteurBoucle > 12)
   {
     CompteurBoucle = 0 ;                                                  // Le CompteurBoucle est remis à zéro une fois que toutes les données ont été affichées
     MonEcran.clear()   ;
