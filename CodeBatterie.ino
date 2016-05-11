@@ -2,8 +2,8 @@
  * @file CodeBatterie.c
  * @brief Programme de tests.
  * @author Guillaume.F
- * @version 12
- * @date 29 Avril 2016
+ * @version 0.16
+ * @date 11 Mai 2016
  *
  * Programme de récupération d'information concernant le Vélomobile, batterie, vitesse, distance.
  *
@@ -36,7 +36,7 @@ const int Periode = 500          ;                                    // Périod
 
 float Tension (0.0)              ;                                    // tension de la batterie
 float Intensite  (0.0)           ;                                    // Intensite
-float Capacite (0.0)             ;                                    // Capacité de la batterie en Ah
+float Capacite (50.0)            ;                                    // Capacité de la batterie en Ah
 int Puissance (0.0)              ;                                    // Puissance délivrée par la batterie principale
 float PuissanceConsommee (0.0)   ;                                    // Puissance consommée par la batterie en Wh
 float PuissanceConsommeeKM (0.0) ;                                    // Puissance consommée par kilomètre par la batterie en Wh/km
@@ -57,6 +57,7 @@ const int chipSelect = 10        ;                                    // Selecti
 float Temperature (0.0)          ;                                    // Température du moteur
 float Altitude (0.0)             ;
 char Date[32]                    ;
+float Ah (0.0)                   ;
 
 static void gpsdump(TinyGPS &MonGPS);
 static bool feedgps();
@@ -268,7 +269,7 @@ float CapteurTemperature::Get_Temperature()
  */
 
 void EnvoyerBluetooth(float Tension, float Intensite, float Puissance,
-                      float Vitesse, float Distance, float Charge)               // Fonction d'affichage de la tension, de l'intensité, de la vitesse, de la distance sur smartphone
+                      float Vitesse, float Distance, float Capacite)               // Fonction d'affichage de la tension, de l'intensité, de la vitesse, de la distance sur smartphone
 {                       
   Bluetooth.println(Tension)         ;                                           // Affichage de la tension sur le téléphone portable
                         
@@ -280,7 +281,7 @@ void EnvoyerBluetooth(float Tension, float Intensite, float Puissance,
                                     
   Bluetooth.println(Distance / 1000) ;                                           // Affichage de la distance parcourue sur le téléphone portable
 
-  Bluetooth.println(Charge)          ;                                           // Affichage de la charge de la batterie sur le téléphone portable
+  Bluetooth.println(Capacite)          ;                                           // Affichage de la charge de la batterie sur le téléphone portable
 }
 
 /**
@@ -338,7 +339,7 @@ static void gpsdump(TinyGPS &MonGPS)
   print_date(MonGPS);
 
   Altitude = MonGPS.f_altitude() ;
-  Serial.println(MonGPS.f_altitude());
+ // Serial.println(MonGPS.f_altitude());
 }
 
 static void print_int(unsigned long val, unsigned long invalid, int len)
@@ -353,7 +354,7 @@ static void print_int(unsigned long val, unsigned long invalid, int len)
     Date[i] = ' ';
   if (len > 0) 
     Date[len-1] = ' ';
-  Serial.print(Date);
+  //Serial.print(Date);
   feedMonGPS();
 }
 
@@ -367,7 +368,7 @@ static void print_date(TinyGPS &MonGPS)
   //char Date[32];
   sprintf(Date, "%02d/%02d/%02d %02d:%02d:%02d   ",
           month, day, year, hour, minute, second);
-  Serial.print(Date);
+  //Serial.print(Date);
  
   feedMonGPS();
 }
@@ -414,6 +415,7 @@ void setup()
   pinMode (0, INPUT)                      ;                            // Déclaration de la broche où est câblé la batterie en Entrée
   pinMode (4, INPUT)                      ;                            // Déclaration de la broche où est câblé le bouton de changement d'affichage LCD
   pinMode (2, INPUT)                      ;                            // Déclaration de la broche où est câblé le capteur de courant de la batterie principale
+  pinMode (6, INPUT)                      ;
   Bluetooth.begin(9600)                   ;                            // Vitesse de transmission du bluetooth
   MonEcran.begin(16, 2)                   ;                            // Déclaration de l'affichage de l'écran LCD
   MonEcran.setRGB(colorR, colorG, colorB) ;                            // Couleur d'affichage de l'écran LCD
@@ -428,7 +430,7 @@ void setup()
     RTC.adjust(DateTime(__DATE__, __TIME__))  ;                             // Met à l'heure à date à laquelle le sketch est compilé
   }
 
-  Test = SD.remove("Rapport.CSV") ;                                         // Si le fichier existe alors il est supprimé
+  //Test = SD.remove("Rapport.CSV") ;                                         // Si le fichier existe alors il est supprimé
 
   Rapport = SD.open("Rapport.CSV", FILE_WRITE) ;                            // Création du fichier Rapport.CSV
   Rapport.println("Tension;Intensite;Puissance;Vitesse;Distance;Charge;"
@@ -443,15 +445,19 @@ void setup()
 
 void loop()
 {
-  bool newdata = false;
-  unsigned long start = millis();
+  Serial.println(Distance) ;
   
-  // Every second we print an update
-  while (millis() - start < 1000)
+  if (digitalRead(6) == HIGH)
   {
-    if (feedMonGPS())
-      newdata = true;
+    Distance = 0.0 ;
   }
+  bool newdata = false;
+  
+  if (feedMonGPS())
+  {
+    newdata = true;
+  }
+    
 
   gpsdump(MonGPS);
   
@@ -471,8 +477,10 @@ void loop()
   Charge = BatterieVelo.ChargeBatterie(Tension)                  ;     // Enregistrement du retour de la méthode ChargeBatterie dans la variable Charge
   Temperature = CapteurTemperature.Get_Temperature()             ;     // Enregistrement du retour de la méthode Get_Temperature dans la variable Temperature
 
-  Capacite = Capacite + Intensite * (LOG_INTERVAL / 1000) / 3600 ;     // Calcul de la capacité de la batterie restante
-  PuissanceConsommee = Intensite * Tension                        ;     // Calcul de la puissance consommée
+  //Capacite = Capacite + Intensite * (LOG_INTERVAL / 1000) / 3600 ;     // Calcul de la capacité de la batterie restante
+  Ah = Intensite * (LOG_INTERVAL / 1000) / 3600                  ;
+  Capacite = Capacite - Ah                                       ;
+  PuissanceConsommee = Intensite * Tension                       ;     // Calcul de la puissance consommée
   PuissanceConsommeeKM = PuissanceConsommee / Distance           ;     // Calcul de la puissance consommée par kilomètre
   
   ChangementEtat = digitalRead(2) ;                                    // Lecture de l'état du capteur de vitesse
@@ -511,18 +519,23 @@ void loop()
   }
   
 
-  if (CompteurBoucle < 6)
+  if (CompteurBoucle < 200)
   {
     AfficherInfo(Tension, Intensite, Distance, Vitesse) ;                 // Appel de la méthode d'affichage de la Tension, de l'intensité, de la distance et de la vitesse
 
     while (BoutonChoixEcran == 1)                                         // Si le bouton de blocage à été appuyer alors l'affichage reste sur les informations en cours
     {
+      if (digitalRead(6) == HIGH)
+      {
+        Distance = 0.0 ;
+      }
+      
       Bouton = digitalRead(4) ;                                           // Lecture de l'état du bouton de blocage de l'écran
   
       if (Bouton == 1 && Bouton != ValeurPrecedente)                      // Condition de changement d'état
       {
         BoutonChoixEcran = 0  ;
-        CompteurBoucle = 6  ;
+        CompteurBoucle = 200  ;
       }
   
       ValeurPrecedente = Bouton ;  
@@ -534,7 +547,9 @@ void loop()
       Charge = BatterieVelo.ChargeBatterie(Tension)                  ;     // Enregistrement du retour de la méthode ChargeBatterie dans la variable Charge
       Temperature = CapteurTemperature.Get_Temperature()             ;     // Enregistrement du retour de la méthode Get_Temperature dans la variable Temperature
 
-      Capacite = Capacite + Intensite * (LOG_INTERVAL / 1000) / 3600 ;     // Calcul de la capacité de la batterie restante
+      //Capacite = Capacite + Intensite * (LOG_INTERVAL / 1000) / 3600 ;     // Calcul de la capacité de la batterie restante
+      Ah = Intensite * (LOG_INTERVAL / 1000) / 3600                  ;
+      Capacite = Capacite - Ah                                       ;
       PuissanceConsommee = Intensite * Tension                       ;     // Calcul de la puissance consommée
       PuissanceConsommeeKM = PuissanceConsommee / Distance           ;     // Calcul de la puissance consommée par kilomètre
 
@@ -575,24 +590,29 @@ void loop()
     }
   }
 
-  if (CompteurBoucle == 6)
+  if (CompteurBoucle == 200)
   {
     MonEcran.clear() ;
   }
 
 
-  if (CompteurBoucle > 6 && CompteurBoucle < 12)
+  if (CompteurBoucle > 200 && CompteurBoucle < 400)
   {
     AfficherInfo2(Puissance, Capacite, PuissanceConsommee, Temperature) ;                 // Appel de la méthode d'affichage de la puisance et de la charge de la batterie
 
     while (BoutonChoixEcran == 1)                                            // Si le bouton de blocage à été appuyer alors l'affichage reste sur les informations en cours
     {
+      if (digitalRead(6) == HIGH)
+      {
+        Distance = 0.0 ;
+      }
+      
       Bouton = digitalRead(4) ;                                              // Lecture de l'état du bouton de blocage de l'écran
   
       if (Bouton == 1 && Bouton != ValeurPrecedente)                         // Condition de changement d'état
       {
         BoutonChoixEcran = 0  ;
-        CompteurBoucle = 12  ;
+        CompteurBoucle = 400  ;
       }
   
       ValeurPrecedente = Bouton ; 
@@ -604,7 +624,9 @@ void loop()
       Charge = BatterieVelo.ChargeBatterie(Tension)                  ;     // Enregistrement du retour de la méthode ChargeBatterie dans la variable Charge
       Temperature = CapteurTemperature.Get_Temperature()             ;     // Enregistrement du retour de la méthode Get_Temperature dans la variable Temperature
 
-      Capacite = Capacite + Intensite * (LOG_INTERVAL / 1000) / 3600 ;     // Calcul de la capacité de la batterie restante
+      //Capacite = Capacite + Intensite * (LOG_INTERVAL / 1000) / 3600 ;     // Calcul de la capacité de la batterie restante
+      Ah = Intensite * (LOG_INTERVAL / 1000) / 3600                  ;
+      Capacite = Capacite - Ah                                       ;
       PuissanceConsommee = Capacite * Tension                        ;     // Calcul de la puissance consommée
       PuissanceConsommeeKM = PuissanceConsommee / Distance           ;     // Calcul de la puissance consommée par kilomètre
 
@@ -645,7 +667,7 @@ void loop()
     }
   }
 
-  if (CompteurBoucle > 12)
+  if (CompteurBoucle > 400)
   {
     CompteurBoucle = 0 ;                                                  // Le CompteurBoucle est remis à zéro une fois que toutes les données ont été affichées
     MonEcran.clear()   ;
