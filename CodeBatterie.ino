@@ -2,13 +2,14 @@
  * @file CodeBatterie.c
  * @brief Programme de tests.
  * @author Guillaume.F
- * @version 0.16
- * @date 11 Mai 2016
+ * @version 0.17
+ * @date 16 Mai 2016
  *
  * Programme de récupération d'information concernant le Vélomobile, batterie, vitesse, distance.
  *
  */
  
+#include <EEPROM.h> 
 #include <Adafruit_Sensor.h>                                          // Librairie permettant d'uriliser les capteur adafruif
 #include <Adafruit_TMP006.h>                                          // Librairie du capteur de température
 #include <RTClib.h>                                                   // Ulisation de l'horloge temps réel
@@ -36,7 +37,7 @@ const int Periode = 500          ;                                    // Périod
 
 float Tension (0.0)              ;                                    // tension de la batterie
 float Intensite  (0.0)           ;                                    // Intensite
-float Capacite (50.0)            ;                                    // Capacité de la batterie en Ah
+float Capacite (0.0)             ;                                    // Capacité de la batterie en Ah
 int Puissance (0.0)              ;                                    // Puissance délivrée par la batterie principale
 float PuissanceConsommee (0.0)   ;                                    // Puissance consommée par la batterie en Wh
 float PuissanceConsommeeKM (0.0) ;                                    // Puissance consommée par kilomètre par la batterie en Wh/km
@@ -56,8 +57,13 @@ float Perimetre (1.6)            ;                                    // Périm�
 const int chipSelect = 10        ;                                    // Selection de la broche pour utiliser la librairie RTC
 float Temperature (0.0)          ;                                    // Température du moteur
 float Altitude (0.0)             ;
+float VitesseGPS (0.0)           ;
 char Date[32]                    ;
+char Lattitude[32]               ;
+char Longitude[32]               ;
 float Ah (0.0)                   ;
+float Lat (0.0)                  ;
+float Lon (0.0)                  ;
 
 static void gpsdump(TinyGPS &MonGPS);
 static bool feedgps();
@@ -241,7 +247,7 @@ float Batterie::ChargeBatterie(float Tension)                          // Calcul
 float CapteurVitesse::Get_Vitesse()
 {
   Compteur.operate()                  ;                                // Fonction qui met à jour la fréquence instantanée
-  Aimant = Compteur.TickRate1Period() ;                                // Nombre de passage de l'aimant par seconde
+  Aimant = Compteur.TickRate5Period() ;                                // Nombre de passage de l'aimant par seconde
   Vitesse = Aimant * Perimetre * 3.6  ;                                // Calcul de la vitesse du vélo
   
   return Vitesse ;
@@ -336,15 +342,18 @@ void AfficherInfo2(int Puissance, float Capacite, float PuissanceConsommee, floa
 
 static void gpsdump(TinyGPS &MonGPS)
 {
+  MonGPS.f_get_position(&Lat, &Lon) ;
+  print_floatLat(Lat, TinyGPS::GPS_INVALID_F_ANGLE, 9, 5);
+  print_floatLon(Lon, TinyGPS::GPS_INVALID_F_ANGLE, 10, 5);
   print_date(MonGPS);
 
   Altitude = MonGPS.f_altitude() ;
- // Serial.println(MonGPS.f_altitude());
+  VitesseGPS = MonGPS.f_speed_kmph() ;
 }
 
 static void print_int(unsigned long val, unsigned long invalid, int len)
 {
-  //char Date[32];
+
   if (val == invalid)
     strcpy(Date, "*******");
   else
@@ -354,7 +363,50 @@ static void print_int(unsigned long val, unsigned long invalid, int len)
     Date[i] = ' ';
   if (len > 0) 
     Date[len-1] = ' ';
-  //Serial.print(Date);
+  feedMonGPS();
+}
+
+static void print_floatLat(float val, float invalid, int len, int prec)
+{
+  if (val == invalid)
+  {
+    strcpy(Lattitude, "*******");
+    Lattitude[len] = 0;
+        if (len > 0) 
+          Lattitude[len-1] = ' ';
+    for (int i=7; i<len; ++i)
+        Lattitude[i] = ' ';
+  }
+  else
+  {
+    //Serial.print(val, prec);
+    int vi = abs((int)val);
+    int flen = prec + (val < 0.0 ? 2 : 1);
+    flen += vi >= 1000 ? 4 : vi >= 100 ? 3 : vi >= 10 ? 2 : 1;
+    //for (int i=flen; i<len; ++i)
+  }
+  feedMonGPS();
+}
+
+static void print_floatLon(float val, float invalid, int len, int prec)
+{
+  if (val == invalid)
+  {
+    strcpy(Longitude, "*******");
+    Longitude[len] = 0;
+        if (len > 0) 
+          Longitude[len-1] = ' ';
+    for (int i=7; i<len; ++i)
+        Longitude[i] = ' ';
+  }
+  else
+  {
+    //Serial.print(val, prec);
+    int vi = abs((int)val);
+    int flen = prec + (val < 0.0 ? 2 : 1);
+    flen += vi >= 1000 ? 4 : vi >= 100 ? 3 : vi >= 10 ? 2 : 1;
+    //for (int i=flen; i<len; ++i)
+  }
   feedMonGPS();
 }
 
@@ -365,10 +417,8 @@ static void print_date(TinyGPS &MonGPS)
 
   MonGPS.crack_datetime(&year, &month, &day, &hour, &minute, &second);
 
-  //char Date[32];
   sprintf(Date, "%02d/%02d/%02d %02d:%02d:%02d   ",
           month, day, year, hour, minute, second);
-  //Serial.print(Date);
  
   feedMonGPS();
 }
@@ -430,12 +480,12 @@ void setup()
     RTC.adjust(DateTime(__DATE__, __TIME__))  ;                             // Met à l'heure à date à laquelle le sketch est compilé
   }
 
-  //Test = SD.remove("Rapport.CSV") ;                                         // Si le fichier existe alors il est supprimé
+  Test = SD.remove("Rapport.CSV") ;                                         // Si le fichier existe alors il est supprimé
 
   Rapport = SD.open("Rapport.CSV", FILE_WRITE) ;                            // Création du fichier Rapport.CSV
   Rapport.println("Tension;Intensite;Puissance;Vitesse;Distance;Charge;"
                   "Puissance Consommee (Wh);Puissance Consommee par Km (Wh/km);"
-                  "Capacite (Ah);Altitude (m);Date") ;
+                  "Capacite (Ah);Altitude (m);VitesseGPS (km/h);Lattitude;Longitude") ;
   Rapport.close();
 }
 
@@ -445,11 +495,16 @@ void setup()
 
 void loop()
 {
-  Serial.println(Distance) ;
+  float value (0.0) ;
+  float value1 (0.0) ;
+  value = EEPROM.read(500);
+  value1 = EEPROM.read(400);
+  
   
   if (digitalRead(6) == HIGH)
   {
     Distance = 0.0 ;
+    Capacite = 0.0 ;
   }
   bool newdata = false;
   
@@ -479,7 +534,7 @@ void loop()
 
   //Capacite = Capacite + Intensite * (LOG_INTERVAL / 1000) / 3600 ;     // Calcul de la capacité de la batterie restante
   Ah = Intensite * (LOG_INTERVAL / 1000) / 3600                  ;
-  Capacite = Capacite - Ah                                       ;
+  Capacite = Capacite + Ah                                       ;
   PuissanceConsommee = Intensite * Tension                       ;     // Calcul de la puissance consommée
   PuissanceConsommeeKM = PuissanceConsommee / Distance           ;     // Calcul de la puissance consommée par kilomètre
   
@@ -511,7 +566,9 @@ void loop()
     Rapport.print(PuissanceConsommeeKM), Rapport.print(';') ;
     Rapport.print(Capacite), Rapport.print(';')             ;
     Rapport.print(Altitude), Rapport.print(';')             ;
-    Rapport.print(Date), Rapport.print(';')                 ;
+    Rapport.print(VitesseGPS), Rapport.print(';')           ;
+    Rapport.print(Lat,5), Rapport.print(';')                ;
+    Rapport.print(Lon,5), Rapport.print(';')                ;
     Rapport.println()                                       ;
     Rapport.close()                                         ;
     
@@ -528,6 +585,7 @@ void loop()
       if (digitalRead(6) == HIGH)
       {
         Distance = 0.0 ;
+        Capacite = 0.0 ;
       }
       
       Bouton = digitalRead(4) ;                                           // Lecture de l'état du bouton de blocage de l'écran
@@ -579,7 +637,9 @@ void loop()
         Rapport.print(PuissanceConsommeeKM), Rapport.print(';') ;
         Rapport.print(Capacite), Rapport.print(';')             ;
         Rapport.print(Altitude), Rapport.print(';')             ;
-        Rapport.print(Date), Rapport.print(';')                 ;
+        Rapport.print(VitesseGPS), Rapport.print(';')           ;
+        Rapport.print(Lat,5), Rapport.print(';')                ;
+        Rapport.print(Lon,5), Rapport.print(';')                ;
         Rapport.println()                                       ;
         Rapport.close()                                         ;
         
@@ -605,6 +665,7 @@ void loop()
       if (digitalRead(6) == HIGH)
       {
         Distance = 0.0 ;
+        Capacite = 0.0 ;
       }
       
       Bouton = digitalRead(4) ;                                              // Lecture de l'état du bouton de blocage de l'écran
@@ -656,7 +717,9 @@ void loop()
         Rapport.print(PuissanceConsommeeKM), Rapport.print(';') ;
         Rapport.print(Capacite), Rapport.print(';')             ;
         Rapport.print(Altitude), Rapport.print(';')             ;
-        Rapport.print(Date), Rapport.print(';')                 ;
+        Rapport.print(VitesseGPS), Rapport.print(';')           ;
+        Rapport.print(Lat,5), Rapport.print(';')                ;
+        Rapport.print(Lon,5), Rapport.print(';')                ;
         Rapport.println()                                       ;
         Rapport.close()                                         ;
         
@@ -673,4 +736,10 @@ void loop()
     MonEcran.clear()   ;
   }
   CompteurBoucle++ ;                                                      // Incrémentation du CompteurBoucle
+
+  Serial.println(Lat,5);
+  Serial.println(Lon,5);
+
+  EEPROM.write(500, Capacite);
+  EEPROM.write(400, Distance);
 }
