@@ -2,8 +2,8 @@
  * @file CodeBatterie.c
  * @brief Programme de tests.
  * @author Guillaume.F
- * @version 0.17
- * @date 16 Mai 2016
+ * @version 0.18
+ * @date 17 Mai 2016
  *
  * Programme de récupération d'information concernant le Vélomobile, batterie, vitesse, distance.
  *
@@ -73,7 +73,6 @@ static void print_date(TinyGPS &gps);
 static void print_str(const char *str, int len);
 
 
-
 RTC_DS1307 RTC;                                                       //Classe RTC_DS1307                                   
 
 File Rapport ;                                                        // Va permettre la création du fichier CSV
@@ -81,6 +80,13 @@ File Rapport ;                                                        // Va perm
 int Test     ;                                                        // Variable utilisée pour tester valeur renvoyée par fonctions SD Card
 
 Ticks  Compteur (numInterrupt, ValeurCapteur, Periode) ;              // Appel du constructeur de la librairie Ticks permettant d'avoir accès aux fonctions associées
+
+char datafile[16] ;
+int jour;
+int mois;
+int annee;
+int heure;
+int Minute; 
 
 /**
  * @class Batterie
@@ -472,7 +478,7 @@ void setup()
   pinMode(53, OUTPUT)                     ;                            // Déclaration de la broche 53 en sortie : sauvegarde sur la carte SD
   SD.begin(53, 51, 50, 52)                ;                            // Déclaration des broches à utiliser pour la gestion de la carte SD
   GPS.begin(9600)                         ;
-   DateTime now = RTC.now()               ;                                 // Actualise la date de la bibliothèque RTC
+  DateTime now = RTC.now()                ;                                 // Actualise la date de la bibliothèque RTC
   
   if (! RTC.isrunning())                                                    // Si RTC ne fonctionne pas
   {
@@ -480,10 +486,25 @@ void setup()
     RTC.adjust(DateTime(__DATE__, __TIME__))  ;                             // Met à l'heure à date à laquelle le sketch est compilé
   }
 
-  Test = SD.remove("Rapport.CSV") ;                                         // Si le fichier existe alors il est supprimé
+  jour=now.day();
+  mois = now.month();
+  annee= now.year();
+  heure = now.hour();
+  Minute = now.minute(); 
 
-  Rapport = SD.open("Rapport.CSV", FILE_WRITE) ;                            // Création du fichier Rapport.CSV
-  Rapport.println("Tension;Intensite;Puissance;Vitesse;Distance;Charge;"
+  Serial.println(annee) ;
+  Serial.println(mois) ;
+  Serial.println(jour) ;
+  Serial.println(heure) ;
+  Serial.println(Minute) ;
+
+  sprintf(datafile,"%d%d%d.CSV",annee,mois,jour);  //  %d pour un int
+  Serial.println(datafile);
+
+  //Test = SD.remove("Rapport.CSV") ;                                         // Si le fichier existe alors il est supprimé
+
+  Rapport = SD.open(datafile, FILE_WRITE) ;                            // Création du fichier Rapport.CSV
+  Rapport.println("Date;Tension;Intensite;Puissance;Vitesse;Distance;Charge;"
                   "Puissance Consommee (Wh);Puissance Consommee par Km (Wh/km);"
                   "Capacite (Ah);Altitude (m);VitesseGPS (km/h);Lattitude;Longitude") ;
   Rapport.close();
@@ -532,11 +553,15 @@ void loop()
   Charge = BatterieVelo.ChargeBatterie(Tension)                  ;     // Enregistrement du retour de la méthode ChargeBatterie dans la variable Charge
   Temperature = CapteurTemperature.Get_Temperature()             ;     // Enregistrement du retour de la méthode Get_Temperature dans la variable Temperature
 
-  //Capacite = Capacite + Intensite * (LOG_INTERVAL / 1000) / 3600 ;     // Calcul de la capacité de la batterie restante
+
   Ah = Intensite * (LOG_INTERVAL / 1000) / 3600                  ;
   Capacite = Capacite + Ah                                       ;
   PuissanceConsommee = Intensite * Tension                       ;     // Calcul de la puissance consommée
-  PuissanceConsommeeKM = PuissanceConsommee / Distance           ;     // Calcul de la puissance consommée par kilomètre
+  PuissanceConsommeeKM = PuissanceConsommee / (Distance/1000)    ;     // Calcul de la puissance consommée par kilomètre
+  if (PuissanceConsommeeKM == 0)
+  {
+    PuissanceConsommeeKM = 0.0 ;
+  }
   
   ChangementEtat = digitalRead(2) ;                                    // Lecture de l'état du capteur de vitesse
 
@@ -555,8 +580,9 @@ void loop()
   {
     EnvoyerBluetooth (Tension, Intensite, Puissance, Vitesse, Distance, Capacite) ;   // Appel de la fonction permettant d'envoyer les données via bluetooth
 
-    Rapport = SD.open("Rapport.CSV", FILE_WRITE)            ;
-    Rapport.print(Tension), Rapport.print(';')              ;
+    Rapport = SD.open(datafile, FILE_WRITE)            ;
+    Rapport.print(annee), Rapport.print("_"), Rapport.print(mois), Rapport.print("_"), Rapport.print(jour), Rapport.print(" "),
+    Rapport.print(heure), Rapport.print(":"), Rapport.print(Minute), Rapport.print(';') ;
     Rapport.print(Intensite), Rapport.print(';')            ;
     Rapport.print(Puissance), Rapport.print(';')            ;
     Rapport.print(Vitesse), Rapport.print(';')              ;
@@ -609,7 +635,7 @@ void loop()
       Ah = Intensite * (LOG_INTERVAL / 1000) / 3600                  ;
       Capacite = Capacite - Ah                                       ;
       PuissanceConsommee = Intensite * Tension                       ;     // Calcul de la puissance consommée
-      PuissanceConsommeeKM = PuissanceConsommee / Distance           ;     // Calcul de la puissance consommée par kilomètre
+      PuissanceConsommeeKM = PuissanceConsommee / (Distance/1000)    ;     // Calcul de la puissance consommée par kilomètre
 
       ChangementEtat = digitalRead(2) ;
 
@@ -626,7 +652,9 @@ void loop()
       {
         EnvoyerBluetooth (Tension, Intensite, Puissance, Vitesse, Distance, Capacite) ;   // Appel de la fonction permettant d'envoyer les données via bluetooth
 
-        Rapport = SD.open("Rapport.CSV", FILE_WRITE)            ;
+        Rapport = SD.open(datafile, FILE_WRITE)            ;
+        Rapport.print(annee), Rapport.print("_"), Rapport.print(mois), Rapport.print("_"), Rapport.print(jour), Rapport.print(" "),
+        Rapport.print(heure), Rapport.print(" "), Rapport.print(Minute), Rapport.print(';') ;
         Rapport.print(Tension), Rapport.print(';')              ;
         Rapport.print(Intensite), Rapport.print(';')            ;
         Rapport.print(Puissance), Rapport.print(';')            ;
@@ -689,7 +717,7 @@ void loop()
       Ah = Intensite * (LOG_INTERVAL / 1000) / 3600                  ;
       Capacite = Capacite - Ah                                       ;
       PuissanceConsommee = Capacite * Tension                        ;     // Calcul de la puissance consommée
-      PuissanceConsommeeKM = PuissanceConsommee / Distance           ;     // Calcul de la puissance consommée par kilomètre
+      PuissanceConsommeeKM = PuissanceConsommee / (Distance/1000)    ;     // Calcul de la puissance consommée par kilomètre
 
       ChangementEtat = digitalRead(2) ;
 
@@ -706,7 +734,9 @@ void loop()
       {
         EnvoyerBluetooth (Tension, Intensite, Puissance, Vitesse, Distance, Capacite) ;   // Appel de la fonction permettant d'envoyer les données via bluetooth
 
-        Rapport = SD.open("Rapport.CSV", FILE_WRITE)            ;
+        Rapport = SD.open(datafile, FILE_WRITE)            ;
+        Rapport.print(annee), Rapport.print("_"), Rapport.print(mois), Rapport.print("_"), Rapport.print(jour), Rapport.print(" "),
+        Rapport.print(heure), Rapport.print(":"), Rapport.print(Minute), Rapport.print(';') ;
         Rapport.print(Tension), Rapport.print(';')              ;
         Rapport.print(Intensite), Rapport.print(';')            ;
         Rapport.print(Puissance), Rapport.print(';')            ;
