@@ -2,14 +2,12 @@
  * @file CodeBatterie.c
  * @brief Programme de tests.
  * @author Guillaume.F
- * @version 0.18
+ * @version 0.19
  * @date 17 Mai 2016
  *
  * Programme de récupération d'information concernant le Vélomobile, batterie, vitesse, distance.
  *
  */
- 
-#include <EEPROM.h> 
 #include <Adafruit_Sensor.h>                                          // Librairie permettant d'uriliser les capteur adafruif
 #include <Adafruit_TMP006.h>                                          // Librairie du capteur de température
 #include <RTClib.h>                                                   // Ulisation de l'horloge temps réel
@@ -53,7 +51,7 @@ char ChangementEtat (0)          ;                                    // Variabl
 char ValeurPrecedenteDist(0)     ;                                    // Variable qui va prendre la valeur de la variable ChangementEtat
 unsigned long Temps = 0L         ;                                    // Variable de temps qui prendra la valeur du temps actuel
 unsigned long Intervalle = 0L    ;                                    // Variable qui permet de définir un intervalle de temps
-float Perimetre (1.6)            ;                                    // Périmètre de la roue
+float Perimetre (1.6/1000)       ;                                    // Périmètre de la roue
 const int chipSelect = 10        ;                                    // Selection de la broche pour utiliser la librairie RTC
 float Temperature (0.0)          ;                                    // Température du moteur
 float Altitude (0.0)             ;
@@ -64,6 +62,7 @@ char Longitude[32]               ;
 float Ah (0.0)                   ;
 float Lat (0.0)                  ;
 float Lon (0.0)                  ;
+const byte BUFFER_SIZE = 32;
 
 static void gpsdump(TinyGPS &MonGPS);
 static bool feedgps();
@@ -76,6 +75,7 @@ static void print_str(const char *str, int len);
 RTC_DS1307 RTC;                                                       //Classe RTC_DS1307                                   
 
 File Rapport ;                                                        // Va permettre la création du fichier CSV
+File Config  ;
 
 int Test     ;                                                        // Variable utilisée pour tester valeur renvoyée par fonctions SD Card
 
@@ -254,7 +254,7 @@ float CapteurVitesse::Get_Vitesse()
 {
   Compteur.operate()                  ;                                // Fonction qui met à jour la fréquence instantanée
   Aimant = Compteur.TickRate5Period() ;                                // Nombre de passage de l'aimant par seconde
-  Vitesse = Aimant * Perimetre * 3.6  ;                                // Calcul de la vitesse du vélo
+  Vitesse = Aimant * Perimetre * 3600 ;                                // Calcul de la vitesse du vélo
   
   return Vitesse ;
 }
@@ -314,7 +314,7 @@ void AfficherInfo(float Tension, float Intensite, float Distance, float Vitesse)
   MonEcran.print(" A ")        ;
 
   MonEcran.setCursor(0, 1)         ;
-  MonEcran.print(Distance/1000, 1) ;
+  MonEcran.print(Distance, 1)      ;
   MonEcran.print("Km ")            ;
   MonEcran.setCursor(7, 1)         ;  
   MonEcran.print(Vitesse, 1)       ;
@@ -498,10 +498,119 @@ void setup()
   Serial.println(heure) ;
   Serial.println(Minute) ;
 
-  sprintf(datafile,"%d%d%d.CSV",annee,mois,jour);  //  %d pour un int
-  Serial.println(datafile);
+  sprintf(datafile,"%d%02d%d.CSV",annee,mois,jour);  //  %d pour un int
 
-  //Test = SD.remove("Rapport.CSV") ;                                         // Si le fichier existe alors il est supprimé
+  char buffer[BUFFER_SIZE], *key, *value;
+  byte i, buffer_lenght, line_counter = 0;
+  Config = SD.open("config.ini") ;
+  if(!Config) { // Gère les erreurs
+    Serial.println("Erreur d'ouverture du fichier !");
+    for(;;);
+  }
+ 
+  /* Tant que non fin de fichier */
+  while(Config.available() > 0 ){
+ 
+    /* Récupère une ligne entière dans le buffer */
+    i = 0;
+    while((buffer[i++] = Config.read()) != '\n') {
+ 
+      /* Si la ligne dépasse la taille du buffer */
+      if(i == BUFFER_SIZE) {
+ 
+        /* On finit de lire la ligne mais sans stocker les données */
+        while(Config.read() != '\n');
+        break; // Et on arrête la lecture de cette ligne
+      }
+    }
+ 
+    /* On garde de côté le nombre de char stocké dans le buffer */
+    buffer_lenght = i;
+ 
+    /* Gestion des lignes trop grande */
+    if(i == BUFFER_SIZE) {
+      Serial.print("Ligne trop longue à la ligne ");
+      Serial.println(line_counter, DEC);
+    }
+ 
+    /* Finalise la chaine de caractéres ASCIIZ en supprimant le \n au passage */
+    buffer[--i] = '\0';
+ 
+    /* Incrémente le compteur de lignes */
+    ++line_counter;
+ 
+    /* Ignore les lignes vides ou les lignes de commentaires */
+    if(buffer[0] == '\0' || buffer[0] == '#') continue;
+       
+    /* Cherche l'emplacement de la clef en ignorant les espaces et les tabulations en début de ligne */
+    i = 0;
+    while(buffer[i] == ' ' || buffer[i] == '\t') {
+      if(++i == buffer_lenght) break; // Ignore les lignes contenant uniquement des espaces et/ou des tabulations
+    }
+    if(i == buffer_lenght) continue; // Gère les lignes contenant uniquement des espaces et/ou des tabulations
+    key = &buffer[i];
+ 
+    /* Cherche l'emplacement du séparateur = en ignorant les espaces et les tabulations âpres la clef */
+    while(buffer[i] != '=') {
+ 
+      /* Ignore les espaces et les tabulations */
+      if(buffer[i] == ' ' || buffer[i] == '\t') buffer[i] = '\0';
+         
+      if(++i == buffer_lenght) {
+        Serial.print("Ligne mal forme a la ligne ");
+        Serial.println(line_counter, DEC);
+        break; // Ignore les lignes mal formé
+      }
+    }
+    if(i == buffer_lenght) continue; // Gère les lignes mal formé
+ 
+    /* Transforme le séparateur = en \0 et continue */
+    buffer[i++] = '\0';
+ 
+    /* Cherche l'emplacement de la valeur en ignorant les espaces et les tabulations âpres le séparateur */
+    while(buffer[i] == ' ' || buffer[i] == '\t') {
+      if(++i == buffer_lenght) {
+        Serial.print("Ligne mal forme a la ligne ");
+        Serial.println(line_counter, DEC);
+        break; // Ignore les lignes mal formé
+      }
+    }
+    if(i == buffer_lenght) continue; // Gère les lignes mal formé
+    value = &buffer[i];
+ 
+    /* Transforme les données texte en valeur utilisable */
+    /* C'est ce morceaux de code qu'il vous faudra adapter pour votre application😉 */
+    if(strcmp(key, "Perimetre") == 0) 
+    {
+      Perimetre = atof(value);
+      Perimetre = Perimetre/1000;
+    } 
+    else if(strcmp(key, "Capacite") == 0) 
+    {
+      Capacite = atof(value);
+    } 
+    else if(strcmp(key, "Distance") == 0) 
+    {
+      Distance = atof(value);
+    } 
+    else 
+    { // Default 
+      Serial.print("Clef inconnu ");
+      Serial.println(key);
+    }
+ 
+  }
+ 
+  /* Ferme le fichier de configuration */
+  Config.close();
+ 
+  /* Affiche le résultat de la configuration */
+  Serial.print("Perimetre = ");
+  Serial.println(Perimetre);
+  Serial.print("Capacite = ");
+  Serial.println(Capacite);
+  Serial.print("Distance = ");
+  Serial.println(Distance);
 
   Rapport = SD.open(datafile, FILE_WRITE) ;                            // Création du fichier Rapport.CSV
   Rapport.println("Date;Tension;Intensite;Puissance;Vitesse;Distance;Charge;"
@@ -516,17 +625,14 @@ void setup()
 
 void loop()
 {
-  float value (0.0) ;
-  float value1 (0.0) ;
-  value = EEPROM.read(500);
-  value1 = EEPROM.read(400);
-  
-  
+  Serial.println(Distance);
+  Serial.println(Perimetre);
   if (digitalRead(6) == HIGH)
   {
     Distance = 0.0 ;
     Capacite = 0.0 ;
   }
+  Serial.println(Distance);
   bool newdata = false;
   
   if (feedMonGPS())
@@ -555,9 +661,9 @@ void loop()
 
 
   Ah = Intensite * (LOG_INTERVAL / 1000) / 3600                  ;
-  Capacite = Capacite + Ah                                       ;
+  Capacite = Capacite - Ah                                       ;
   PuissanceConsommee = Intensite * Tension                       ;     // Calcul de la puissance consommée
-  PuissanceConsommeeKM = PuissanceConsommee / (Distance/1000)    ;     // Calcul de la puissance consommée par kilomètre
+  PuissanceConsommeeKM = PuissanceConsommee / Distance    ;     // Calcul de la puissance consommée par kilomètre
   if (PuissanceConsommeeKM == 0)
   {
     PuissanceConsommeeKM = 0.0 ;
@@ -569,20 +675,21 @@ void loop()
   {
     Distance = Perimetre + Distance ;                                  // Calcul de la distance parcourue
   }
-  
+  Serial.println(Distance);
   ValeurPrecedenteDist = ChangementEtat ;                              // Enregistrement de l'état actuel du capteur
 
   unsigned long TempsContinu = millis() ;                              // Variable de temps
   
   Intervalle = TempsContinu - Temps ;                                  // Intervalle de temps qui permet d'effctuer une action de manière régulière et connu.
 
-  if (Intervalle >= 1000)                                              // Toute les secondes s'effectuera les actions présentent dans la condition.
+  if (Intervalle >= 2000)                                              // Toute les secondes s'effectuera les actions présentent dans la condition.
   {
     EnvoyerBluetooth (Tension, Intensite, Puissance, Vitesse, Distance, Capacite) ;   // Appel de la fonction permettant d'envoyer les données via bluetooth
 
     Rapport = SD.open(datafile, FILE_WRITE)            ;
     Rapport.print(annee), Rapport.print("_"), Rapport.print(mois), Rapport.print("_"), Rapport.print(jour), Rapport.print(" "),
     Rapport.print(heure), Rapport.print(":"), Rapport.print(Minute), Rapport.print(';') ;
+    Rapport.print(Tension), Rapport.print(';')              ;
     Rapport.print(Intensite), Rapport.print(';')            ;
     Rapport.print(Puissance), Rapport.print(';')            ;
     Rapport.print(Vitesse), Rapport.print(';')              ;
@@ -597,6 +704,13 @@ void loop()
     Rapport.print(Lon,5), Rapport.print(';')                ;
     Rapport.println()                                       ;
     Rapport.close()                                         ;
+
+    SD.remove("config.ini") ;
+    Config = SD.open("config.ini", FILE_WRITE) ;
+    Config.print("Perimetre="), Config.println(Perimetre*1000);
+    Config.print("Capacite="), Config.println(Capacite);
+    Config.print("Distance="), Config.println(Distance);
+    Config.close();
     
     Temps = TempsContinu ;                                                // Mise à jour de la variable de Temps (variable tempon)
   }
@@ -635,7 +749,7 @@ void loop()
       Ah = Intensite * (LOG_INTERVAL / 1000) / 3600                  ;
       Capacite = Capacite - Ah                                       ;
       PuissanceConsommee = Intensite * Tension                       ;     // Calcul de la puissance consommée
-      PuissanceConsommeeKM = PuissanceConsommee / (Distance/1000)    ;     // Calcul de la puissance consommée par kilomètre
+      PuissanceConsommeeKM = PuissanceConsommee / (Distance)    ;     // Calcul de la puissance consommée par kilomètre
 
       ChangementEtat = digitalRead(2) ;
 
@@ -648,7 +762,7 @@ void loop()
       unsigned long TempsContinu = millis() ;
       Intervalle = TempsContinu - Temps     ;
 
-      if (Intervalle >= 1000)
+      if (Intervalle >= 2000)
       {
         EnvoyerBluetooth (Tension, Intensite, Puissance, Vitesse, Distance, Capacite) ;   // Appel de la fonction permettant d'envoyer les données via bluetooth
 
@@ -659,7 +773,7 @@ void loop()
         Rapport.print(Intensite), Rapport.print(';')            ;
         Rapport.print(Puissance), Rapport.print(';')            ;
         Rapport.print(Vitesse), Rapport.print(';')              ;
-        Rapport.print(Distance/1000), Rapport.print(';')        ;
+        Rapport.print(Distance), Rapport.print(';')        ;
         Rapport.print(Charge), Rapport.print(';')               ;
         Rapport.print(PuissanceConsommee), Rapport.print(';')   ;
         Rapport.print(PuissanceConsommeeKM), Rapport.print(';') ;
@@ -670,6 +784,13 @@ void loop()
         Rapport.print(Lon,5), Rapport.print(';')                ;
         Rapport.println()                                       ;
         Rapport.close()                                         ;
+        
+        SD.remove("config.ini") ;
+        Config = SD.open("config.ini", FILE_WRITE) ;
+        Config.print("Perimetre="), Config.println(Perimetre);
+        Config.print("Capacite="), Config.println(Capacite*1000);
+        Config.print("Distance="), Config.println(Distance);
+        Config.close();
         
         Temps = TempsContinu ;
       }
@@ -717,20 +838,20 @@ void loop()
       Ah = Intensite * (LOG_INTERVAL / 1000) / 3600                  ;
       Capacite = Capacite - Ah                                       ;
       PuissanceConsommee = Capacite * Tension                        ;     // Calcul de la puissance consommée
-      PuissanceConsommeeKM = PuissanceConsommee / (Distance/1000)    ;     // Calcul de la puissance consommée par kilomètre
+      PuissanceConsommeeKM = PuissanceConsommee / Distance    ;     // Calcul de la puissance consommée par kilomètre
 
       ChangementEtat = digitalRead(2) ;
 
       if (ChangementEtat == 1 && ChangementEtat != ValeurPrecedenteDist)
       {
-        Distance = Perimetre + Distance ;                                     
+        Distance = Perimetre + Distance ;                               
       }
       ValeurPrecedenteDist = ChangementEtat ;
 
       unsigned long TempsContinu = millis() ;
       Intervalle = TempsContinu - Temps     ;
 
-      if (Intervalle >= 1000)
+      if (Intervalle >= 2000)
       {
         EnvoyerBluetooth (Tension, Intensite, Puissance, Vitesse, Distance, Capacite) ;   // Appel de la fonction permettant d'envoyer les données via bluetooth
 
@@ -741,7 +862,7 @@ void loop()
         Rapport.print(Intensite), Rapport.print(';')            ;
         Rapport.print(Puissance), Rapport.print(';')            ;
         Rapport.print(Vitesse), Rapport.print(';')              ;
-        Rapport.print(Distance/1000), Rapport.print(';')        ;
+        Rapport.print(Distance), Rapport.print(';')        ;
         Rapport.print(Charge), Rapport.print(';')               ;
         Rapport.print(PuissanceConsommee), Rapport.print(';')   ;
         Rapport.print(PuissanceConsommeeKM), Rapport.print(';') ;
@@ -752,6 +873,13 @@ void loop()
         Rapport.print(Lon,5), Rapport.print(';')                ;
         Rapport.println()                                       ;
         Rapport.close()                                         ;
+
+        SD.remove("config.ini") ;
+        Config = SD.open("config.ini", FILE_WRITE) ;
+        Config.print("Perimetre="), Config.println(Perimetre*1000);
+        Config.print("Capacite="), Config.println(Capacite);
+        Config.print("Distance="), Config.println(Distance);
+        Config.close();
         
         Temps = TempsContinu ;
       }
@@ -766,10 +894,4 @@ void loop()
     MonEcran.clear()   ;
   }
   CompteurBoucle++ ;                                                      // Incrémentation du CompteurBoucle
-
-  Serial.println(Lat,5);
-  Serial.println(Lon,5);
-
-  EEPROM.write(500, Capacite);
-  EEPROM.write(400, Distance);
 }
