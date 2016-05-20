@@ -2,6 +2,7 @@
  * @file CodeBatterie.c
  * @brief Programme de tests.
  * @author Guillaume.F
+ * @version 0.2
  * @date 20 Mai 2016
  *
  * Programme de récupération d'information concernant le Vélomobile, batterie, vitesse, distance.
