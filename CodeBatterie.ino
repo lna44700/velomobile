@@ -2,8 +2,7 @@
  * @file CodeBatterie.c
  * @brief Programme de tests.
  * @author Guillaume.F
- * @version 0.19
- * @date 17 Mai 2016
+ * @date 20 Mai 2016
  *
  * Programme de récupération d'information concernant le Vélomobile, batterie, vitesse, distance.
  *
@@ -51,7 +50,7 @@ char ChangementEtat (0)          ;                                    // Variabl
 char ValeurPrecedenteDist(0)     ;                                    // Variable qui va prendre la valeur de la variable ChangementEtat
 unsigned long Temps = 0L         ;                                    // Variable de temps qui prendra la valeur du temps actuel
 unsigned long Intervalle = 0L    ;                                    // Variable qui permet de définir un intervalle de temps
-float Perimetre (1.6/1000)       ;                                    // Périmètre de la roue
+float Perimetre (0.0)            ;                                    // Périmètre de la roue
 const int chipSelect = 10        ;                                    // Selection de la broche pour utiliser la librairie RTC
 float Temperature (0.0)          ;                                    // Température du moteur
 float Altitude (0.0)             ;
@@ -254,7 +253,7 @@ float CapteurVitesse::Get_Vitesse()
 {
   Compteur.operate()                  ;                                // Fonction qui met à jour la fréquence instantanée
   Aimant = Compteur.TickRate5Period() ;                                // Nombre de passage de l'aimant par seconde
-  Vitesse = Aimant * Perimetre * 3600 ;                                // Calcul de la vitesse du vélo
+  Vitesse = Aimant * Perimetre * 3.6 ;                                // Calcul de la vitesse du vélo
   
   return Vitesse ;
 }
@@ -314,7 +313,7 @@ void AfficherInfo(float Tension, float Intensite, float Distance, float Vitesse)
   MonEcran.print(" A ")        ;
 
   MonEcran.setCursor(0, 1)         ;
-  MonEcran.print(Distance, 1)      ;
+  MonEcran.print(Distance/1000, 1) ;
   MonEcran.print("Km ")            ;
   MonEcran.setCursor(7, 1)         ;  
   MonEcran.print(Vitesse, 1)       ;
@@ -354,7 +353,15 @@ static void gpsdump(TinyGPS &MonGPS)
   print_date(MonGPS);
 
   Altitude = MonGPS.f_altitude() ;
+  if (Altitude = 1000.00000)
+  {
+    Altitude = 0.0 ;
+  }
   VitesseGPS = MonGPS.f_speed_kmph() ;
+  if (VitesseGPS <= 0)
+  {
+    VitesseGPS = 0.0 ;
+  }
 }
 
 static void print_int(unsigned long val, unsigned long invalid, int len)
@@ -583,7 +590,6 @@ void setup()
     if(strcmp(key, "Perimetre") == 0) 
     {
       Perimetre = atof(value);
-      Perimetre = Perimetre/1000;
     } 
     else if(strcmp(key, "Capacite") == 0) 
     {
@@ -625,14 +631,21 @@ void setup()
 
 void loop()
 {
-  Serial.println(Distance);
-  Serial.println(Perimetre);
+  DateTime now = RTC.now()                ;
+  
+  jour=now.day();
+  mois = now.month();
+  annee= now.year();
+  heure = now.hour();
+  Minute = now.minute(); 
+  
+  //Serial.println(Distance);
+  //Serial.println(Perimetre);
   if (digitalRead(6) == HIGH)
   {
     Distance = 0.0 ;
-    Capacite = 0.0 ;
   }
-  Serial.println(Distance);
+  //Serial.println(Distance);
   bool newdata = false;
   
   if (feedMonGPS())
@@ -664,7 +677,7 @@ void loop()
   Capacite = Capacite - Ah                                       ;
   PuissanceConsommee = Intensite * Tension                       ;     // Calcul de la puissance consommée
   PuissanceConsommeeKM = PuissanceConsommee / Distance    ;     // Calcul de la puissance consommée par kilomètre
-  if (PuissanceConsommeeKM == 0)
+  if (Distance == 0.0)
   {
     PuissanceConsommeeKM = 0.0 ;
   }
@@ -675,7 +688,7 @@ void loop()
   {
     Distance = Perimetre + Distance ;                                  // Calcul de la distance parcourue
   }
-  Serial.println(Distance);
+  //Serial.println(Distance);
   ValeurPrecedenteDist = ChangementEtat ;                              // Enregistrement de l'état actuel du capteur
 
   unsigned long TempsContinu = millis() ;                              // Variable de temps
@@ -707,7 +720,7 @@ void loop()
 
     SD.remove("config.ini") ;
     Config = SD.open("config.ini", FILE_WRITE) ;
-    Config.print("Perimetre="), Config.println(Perimetre*1000);
+    Config.print("Perimetre="), Config.println(Perimetre);
     Config.print("Capacite="), Config.println(Capacite);
     Config.print("Distance="), Config.println(Distance);
     Config.close();
@@ -725,7 +738,6 @@ void loop()
       if (digitalRead(6) == HIGH)
       {
         Distance = 0.0 ;
-        Capacite = 0.0 ;
       }
       
       Bouton = digitalRead(4) ;                                           // Lecture de l'état du bouton de blocage de l'écran
@@ -773,7 +785,7 @@ void loop()
         Rapport.print(Intensite), Rapport.print(';')            ;
         Rapport.print(Puissance), Rapport.print(';')            ;
         Rapport.print(Vitesse), Rapport.print(';')              ;
-        Rapport.print(Distance), Rapport.print(';')        ;
+        Rapport.print(Distance/1000), Rapport.print(';')        ;
         Rapport.print(Charge), Rapport.print(';')               ;
         Rapport.print(PuissanceConsommee), Rapport.print(';')   ;
         Rapport.print(PuissanceConsommeeKM), Rapport.print(';') ;
@@ -788,7 +800,7 @@ void loop()
         SD.remove("config.ini") ;
         Config = SD.open("config.ini", FILE_WRITE) ;
         Config.print("Perimetre="), Config.println(Perimetre);
-        Config.print("Capacite="), Config.println(Capacite*1000);
+        Config.print("Capacite="), Config.println(Capacite);
         Config.print("Distance="), Config.println(Distance);
         Config.close();
         
@@ -814,7 +826,6 @@ void loop()
       if (digitalRead(6) == HIGH)
       {
         Distance = 0.0 ;
-        Capacite = 0.0 ;
       }
       
       Bouton = digitalRead(4) ;                                              // Lecture de l'état du bouton de blocage de l'écran
@@ -862,7 +873,7 @@ void loop()
         Rapport.print(Intensite), Rapport.print(';')            ;
         Rapport.print(Puissance), Rapport.print(';')            ;
         Rapport.print(Vitesse), Rapport.print(';')              ;
-        Rapport.print(Distance), Rapport.print(';')        ;
+        Rapport.print(Distance/1000), Rapport.print(';')        ;
         Rapport.print(Charge), Rapport.print(';')               ;
         Rapport.print(PuissanceConsommee), Rapport.print(';')   ;
         Rapport.print(PuissanceConsommeeKM), Rapport.print(';') ;
@@ -876,7 +887,7 @@ void loop()
 
         SD.remove("config.ini") ;
         Config = SD.open("config.ini", FILE_WRITE) ;
-        Config.print("Perimetre="), Config.println(Perimetre*1000);
+        Config.print("Perimetre="), Config.println(Perimetre);
         Config.print("Capacite="), Config.println(Capacite);
         Config.print("Distance="), Config.println(Distance);
         Config.close();
@@ -893,5 +904,6 @@ void loop()
     CompteurBoucle = 0 ;                                                  // Le CompteurBoucle est remis à zéro une fois que toutes les données ont été affichées
     MonEcran.clear()   ;
   }
+  Serial.println(PuissanceConsommeeKM);
   CompteurBoucle++ ;                                                      // Incrémentation du CompteurBoucle
 }
