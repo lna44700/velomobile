@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:paddingBottom="@dimen/activity_vertical_margin"
+    android:paddingLeft="@dimen/activity_horizontal_margin"
+    android:paddingRight="@dimen/activity_horizontal_margin"
+    android:paddingTop="@dimen/activity_vertical_margin"
+    tools:context="com.example.silver.vmapp.SelectionnerAppareil">
+
+    <TextView
+        android:id="@+id/text"
+        android:layout_width="fill_parent"
+        android:layout_height="wrap_content"
+        android:text="Séléctionnez un appareil"
+        android:paddingLeft="10dip"
+        android:textSize="27sp"/>
+
+    <TextView
+        android:id="@+id/info"
+        android:textSize="14sp"
+        android:paddingLeft="10dip"
+        android:paddingBottom="5dip"
+        android:text="Vous devez être déjà associé avec un appareil pour le séléctionner."
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_below="@+id/text"/>
+
+    <ListView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:id="@+id/liste_appareils"
+        android:layout_below="@+id/info"
+        android:layout_alignParentStart="true" />
+</RelativeLayout>
