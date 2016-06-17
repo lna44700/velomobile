@@ -1,13 +1,21 @@
 /**
- * @file CodeBatterie.c
- * @brief Programme de tests.
+ * @file CodeBatterie.ino
+ * @brief Programme Velomobile Arduino Mega.
  * @author Guillaume.F
- * @version 0.21
- * @date 20 Mai 2016
+ * @version 1.0
+ * @date 17 Juin 2016
  *
- * Programme de récupération d'information concernant le Vélomobile, batterie, vitesse, distance.
+ * Programme de récupération d'informations. Tension et intensité de la batterie moteur, vitesse du vélo,distance parcourue
+ * position GPS, altitude, température moteur. Calcule la puissance délivrée par la batterie moteur, la capacité, les ampères heure.
+ * Enregistre toutes ces données sur une carte SD dans un fichier au format CSV. Un fichier de configuration dans la carte SD permet
+ * de définir le périmètre de la roue et la capacité de la batterie moteur.
  *
  */
+
+/**
+ * @brief implémentation des librairies
+ */
+ 
 #include <Adafruit_Sensor.h>                                          // Librairie permettant d'uriliser les capteur adafruif
 #include <Adafruit_TMP006.h>                                          // Librairie du capteur de température
 #include <RTClib.h>                                                   // Ulisation de l'horloge temps réel
@@ -19,7 +27,9 @@
 #include <Ticks.h>                                                    // Compte des impulsions sur un certains laps de temps et en déduis la fréquence
 #include <TinyGPS.h>                                                  // Librairie permettant d'utiliser le module MonGPS
 
-#define LOG_INTERVAL 1000                                             // Permet de relever les données plus rapidement
+/**
+ * @brief déclaration des objets
+ */                                
 
 SoftwareSerial Bluetooth(10, 11) ;                                    // RX | TX
 SoftwareSerial GPS(12, 13)       ;                                    // Déclaration des broches RX | TX pour le module MonGPS
@@ -37,9 +47,14 @@ const byte BUFFER_SIZE = 32      ;                                    // Taille 
 
 Ticks  Compteur (numInterrupt, ValeurCapteur, Periode) ;              // Appel du constructeur de la librairie Ticks permettant d'avoir accès aux fonctions associées
 
+/**
+ * @brief déclaration des différentes variables
+ */
+
 float Tension (0.0)              ;                                    // tension de la batterie
 float Intensite  (0.0)           ;                                    // Intensite
 float Capacite (0.0)             ;                                    // Capacité de la batterie en Ah
+float CapRAZ (0.0)               ;
 int Puissance (0.0)              ;                                    // Puissance délivrée par la batterie principale
 float PuissanceConsommee (0.0)   ;                                    // Puissance consommée par la batterie en Wh
 float PuissanceConsommeeKM (0.0) ;                                    // Puissance consommée par kilomètre par la batterie en Wh/km
@@ -198,7 +213,12 @@ float Batterie::Get_Tension()
 float Batterie::Get_Intensite()
 {
   Intensite = analogRead (2)                           ;               // Lire l'intensité délivrée par la batterie principal
-  Intensite = (Intensite * 5 / 1023) * (73.3 / 5) - 37 ;               // Calcul permettant d'afficher l'intensité en ampère
+  Intensite = (Intensite * 5 / 1023) * (73.3 / 5) - 37.4 ;               // Calcul permettant d'afficher l'intensité en ampère
+
+  if (Intensite <= 0.5)
+  {
+    Intensite = 0.0
+  }
 
   return Intensite ;
 }
@@ -218,6 +238,7 @@ float Batterie::CalculerPuissance(float Tension, float Intensite)
 }
 
 /**
+ * @fn float CapteurVitesse::Get_Vitesse(void)
  * @brief Fonction qui calcule la vitesse du Vélomobile
  * @return Vitesse
  */
@@ -225,13 +246,14 @@ float Batterie::CalculerPuissance(float Tension, float Intensite)
 float CapteurVitesse::Get_Vitesse()
 {
   Compteur.operate()                  ;                                // Fonction qui met à Jour la fréquence instantanée
-  Aimant = Compteur.TickRate5Period() ;                                // Nombre de passage de l'aimant par seconde
+  Aimant = Compteur.TickRate25Period() ;                                // Nombre de passage de l'aimant par seconde
   Vitesse = Aimant * Perimetre * 3.6  ;                                // Calcul de la vitesse du vélo
-  
+
   return Vitesse ;
 }
 
 /**
+ * @fn float CapteurTemperature::Get_Temperature(void)
  * @brief Fonction qui calcule la température du moteur
  * @return Temperature
  */
@@ -244,6 +266,7 @@ float CapteurTemperature::Get_Temperature()
 }
 
 /**
+ * @fn void EnvoyerBluetooth(float, float, float, float, float, float)
  * @brief Methode qui permet d'envoyer de toutes les informations récupérées en bluetooth vers le smartphone Android
  * @param Tension est la tension délivrée par la batterie
  * @param Intensite est le courant délivré par la batterie
@@ -269,13 +292,14 @@ void EnvoyerBluetooth(float Tension, float Intensite, float Puissance,
 }
 
 /**
+ * @fn void AfficherInfo(float, float, float, float)
  * @brief Methode qui permet l'affichage des informations sur l'écran LCD
  * @param Tension est la tension délivrée par la batterie
  * @param Intensite est le courant délivré par la batterie
  * @param Vitesse est la vitesse du Vélomobile
  * @param Distance est la distance parcourue par l'utilisateur
  */
-
+ 
 void AfficherInfo(float Tension, float Intensite, float Distance, float Vitesse)      // Fonction d'affichage de la tension, de l'intensité, de la distance et de
 {                                                                                     // la vitesse sur l'écran LCD
   MonEcran.setCursor(0, 0)     ;                       // Positionne le curseur à la colonne 0 et à la ligne 0
@@ -294,6 +318,7 @@ void AfficherInfo(float Tension, float Intensite, float Distance, float Vitesse)
 }
 
 /**
+ * @fn void AfficherInfo2(int, float, float, float)
  * @brief Methode qui permet l'affichage des informations sur l'écran LCD
  * @param Puissance est la puissance délivrée par la batterie
  * @param Capacite est la capacité de la batterie restante
@@ -336,6 +361,14 @@ static void gpsdump(TinyGPS &MonGPS)
   }
 }
 
+/**
+ * @brief Méthode permettant de transformer la Latitude en type float qui est de base sous forme de tableau de chaîne de caractère
+ * @param val est la valeur de la variable Lat obtenue dans la méthode gpsdump
+ * @param invalid permet de savoir si la variable val est correcte
+ * @param len 
+ * @param prec 
+ */
+
 static void print_floatLat(float val, float invalid, int len, int prec)
 {
   if (val == invalid)
@@ -355,6 +388,14 @@ static void print_floatLat(float val, float invalid, int len, int prec)
   }
   feedMonGPS() ;
 }
+
+/**
+ * @brief Méthode permettant de transformer la Longitude en type float qui est de base sous forme de tableau de chaîne de caractère
+ * @param val est la valeur de la variable Lon obtenue dans la méthode gpsdump
+ * @param invalid permet de savoir si la variable val est correcte
+ * @param len 
+ * @param prec 
+ */
 
 static void print_floatLon(float val, float invalid, int len, int prec)
 {
@@ -388,12 +429,15 @@ static bool feedMonGPS()
 
 /**
  * @li Creation de l'objet BatterieVelo de type Batterie
- * @li Creation de l'objet CapteurVitesse
- * @li Creation de l'objet CapteurTemperature
  */
-
 Batterie BatterieVelo                 ;
+/**
+ * @li Creation de l'objet CapteurVitesse de type CapteurVitesse
+ */
 CapteurVitesse CapteurVitesse         ;
+/**
+ * @li Creation de l'objet CapteurTemperature de type CapteurTemperature
+ */
 CapteurTemperature CapteurTemperature ;
 
 /**
@@ -405,6 +449,7 @@ const int colorG = 255 ;                                               // Intens
 const int colorB = 255 ;                                               // Intensité de la couleur Bleu de l'écran LCD
 
 /**
+ * @fn void setup()
  * @brief Définition des entrées / sorties de la carte Arduino, démarrage des librairies utilisées
  */
 
@@ -538,7 +583,11 @@ void setup()
     else if(strcmp(key, "Distance") == 0) 
     {
       Distance = atof(value) ;
-    } 
+    }
+    else if(strcmp(key, "CapaciteInit") == 0)
+    {
+      CapRAZ = atof(value) ; 
+    }
     else 
     { // Default 
       Serial.print("Clef inconnu ") ;
@@ -556,8 +605,12 @@ void setup()
                   "Capacite (Ah);Altitude (m);VitesseGPS (km/h);Latitude;Longitude") ;
   Rapport.close() ;
 }
+ 
+float VitessePrec(0.0);
+float VitesseSauv(0.0) ;
 
 /**
+ * @fn void loop()
  * @brief Entrée du programme
  */
 
@@ -575,6 +628,7 @@ void loop()
   if (digitalRead(6) == HIGH)
   {
     Distance = 0.0 ;
+    Capacite = CapRAZ ;
   }
 
   bool newdata = false ;
@@ -595,15 +649,19 @@ void loop()
   
   ValeurPrecedente = Bouton ;                                          // Enregistrement de l'état actuel du bouton
 
+
+  
   Tension = BatterieVelo.Get_Tension()                           ;     // Enregitrement du retour de la méthode Get_Tension dans la variable Tension
   Intensite = BatterieVelo.Get_Intensite()                       ;     // Enregitrement du retour de la méthode Get_Intensite dans la variable Intensite
   Puissance = BatterieVelo.CalculerPuissance(Tension, Intensite) ;     // Enregitrement du retour de la méthode CalculerPuissance dans la variable Puissance
-  Vitesse = CapteurVitesse.Get_Vitesse()                         ;     // Enregitrement du retour de la méthode Get_Vitesse dans la variable Vitesse
+  for (int j = 0; j < 2 ; j++)
+  {
+    Vitesse = CapteurVitesse.Get_Vitesse()                         ;     // Enregitrement du retour de la méthode Get_Vitesse dans la variable Vitesse
+    VitessePrec = CapteurVitesse.Get_Vitesse() ;
+    Vitesse = (Vitesse + VitessePrec)/2 ;
+  }
   Temperature = CapteurTemperature.Get_Temperature()             ;     // Enregistrement du retour de la méthode Get_Temperature dans la variable Temperature
 
-
-  Ah = Intensite * (LOG_INTERVAL / 1000) / 3600                  ;
-  Capacite = Capacite - Ah                                       ;
   PuissanceConsommee = Intensite * Tension                       ;     // Calcul de la puissance consommée
   PuissanceConsommeeKM = PuissanceConsommee / Distance           ;     // Calcul de la puissance consommée par kilomètre
   if (Distance == 0.0)
@@ -626,6 +684,8 @@ void loop()
 
   if (Intervalle >= 2000)                                              // Toute les secondes s'effectuera les actions présentent dans la condition.
   {
+    Ah = Intensite * (Intervalle/1000) / 3600                  ;
+    Capacite = Capacite - Ah                                       ;
     EnvoyerBluetooth (Tension, Intensite, Puissance, Vitesse, Distance, Capacite) ;   // Appel de la fonction permettant d'envoyer les données via bluetooth
 
     Rapport = SD.open(NomCSV, FILE_WRITE)                 ;
@@ -651,6 +711,7 @@ void loop()
     Config.print("Perimetre="), Config.println(Perimetre);
     Config.print("Capacite="), Config.println(Capacite);
     Config.print("Distance="), Config.println(Distance);
+    Config.print("CapaciteInit="), Config.println(CapRAZ);
     Config.close();
     
     Temps = TempsContinu ;                                                // Mise à Jour de la variable de Temps (variable tempon)
@@ -666,6 +727,7 @@ void loop()
       if (digitalRead(6) == HIGH)
       {
         Distance = 0.0 ;
+        Capacite = CapRAZ ;
       }
       
       Bouton = digitalRead(4) ;                                           // Lecture de l'état du bouton de blocage de l'écran
@@ -684,9 +746,7 @@ void loop()
       Vitesse = CapteurVitesse.Get_Vitesse()                         ;     // Enregitrement du retour de la méthode Get_Vitesse dans la variable Vitesse
       Temperature = CapteurTemperature.Get_Temperature()             ;     // Enregistrement du retour de la méthode Get_Temperature dans la variable Temperature
 
-      //Capacite = Capacite + Intensite * (LOG_INTERVAL / 1000) / 3600 ;     // Calcul de la capacité de la batterie restante
-      Ah = Intensite * (LOG_INTERVAL / 1000) / 3600                  ;
-      Capacite = Capacite - Ah                                       ;
+   
       PuissanceConsommee = Intensite * Tension                       ;     // Calcul de la puissance consommée
       PuissanceConsommeeKM = PuissanceConsommee / (Distance)         ;     // Calcul de la puissance consommée par kilomètre
 
@@ -703,6 +763,8 @@ void loop()
 
       if (Intervalle >= 2000)
       {
+        Ah = Intensite * (Intervalle/1000) / 3600                  ;
+        Capacite = Capacite - Ah                                       ;
         EnvoyerBluetooth (Tension, Intensite, Puissance, Vitesse, Distance, Capacite) ;   // Appel de la fonction permettant d'envoyer les données via bluetooth
 
         Rapport = SD.open(NomCSV, FILE_WRITE)            ;
@@ -728,6 +790,7 @@ void loop()
         Config.print("Perimetre="), Config.println(Perimetre);
         Config.print("Capacite="), Config.println(Capacite);
         Config.print("Distance="), Config.println(Distance);
+        Config.print("CapaciteInit="), Config.println(CapRAZ);
         Config.close();
         
         Temps = TempsContinu ;
@@ -752,6 +815,7 @@ void loop()
       if (digitalRead(6) == HIGH)
       {
         Distance = 0.0 ;
+        Capacite = CapRAZ ;
       }
       
       Bouton = digitalRead(4) ;                                              // Lecture de l'état du bouton de blocage de l'écran
@@ -770,9 +834,7 @@ void loop()
       Vitesse = CapteurVitesse.Get_Vitesse()                         ;     // Enregitrement du retour de la méthode Get_Vitesse dans la variable Vitesse
       Temperature = CapteurTemperature.Get_Temperature()             ;     // Enregistrement du retour de la méthode Get_Temperature dans la variable Temperature
 
-      //Capacite = Capacite + Intensite * (LOG_INTERVAL / 1000) / 3600 ;     // Calcul de la capacité de la batterie restante
-      Ah = Intensite * (LOG_INTERVAL / 1000) / 3600                  ;
-      Capacite = Capacite - Ah                                       ;
+ 
       PuissanceConsommee = Capacite * Tension                        ;     // Calcul de la puissance consommée
       PuissanceConsommeeKM = PuissanceConsommee / Distance           ;     // Calcul de la puissance consommée par kilomètre
 
@@ -789,6 +851,8 @@ void loop()
 
       if (Intervalle >= 2000)
       {
+        Ah = Intensite * (Intervalle/1000) / 3600                  ;
+        Capacite = Capacite - Ah                                       ;
         EnvoyerBluetooth (Tension, Intensite, Puissance, Vitesse, Distance, Capacite) ;   // Appel de la fonction permettant d'envoyer les données via bluetooth
 
         Rapport = SD.open(NomCSV, FILE_WRITE)            ;
@@ -814,6 +878,7 @@ void loop()
         Config.print("Perimetre="), Config.println(Perimetre);
         Config.print("Capacite="), Config.println(Capacite);
         Config.print("Distance="), Config.println(Distance);
+        Config.print("CapaciteInit="), Config.println(CapRAZ);
         Config.close();
         
         Temps = TempsContinu ;
